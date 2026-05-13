@@ -1,36 +1,139 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Ewidencja Przejazdów
 
-## Getting Started
+Aplikacja webowa do zarządzania ewidencją przejazdów służbowych, zastępująca plik Excel. Zbudowana w Next.js 14, TypeScript, Tailwind CSS i Supabase.
 
-First, run the development server:
+## Funkcje
+
+- Ewidencja przejazdów (trasy, paliwo, hotele, faktury)
+- Zarządzanie pojazdami, kierowcami, klientami
+- Raporty miesięczne i roczne z eksportem PDF/Excel/CSV
+- Import danych z pliku Excel
+- Wykrywanie błędów w ewidencji
+- Panel mobilny (PWA-ready)
+- Role użytkowników: admin / menedżer / kierowca
+
+## Quick start
+
+### 1. Wymagania
+
+- Node.js 18+
+- Konto Supabase (supabase.com)
+- Konto Vercel (opcjonalnie)
+
+### 2. Klonowanie i instalacja
+
+```bash
+git clone <repo-url>
+cd ewidencja-nextjs
+npm install
+```
+
+### 3. Konfiguracja środowiska
+
+```bash
+cp .env.example .env.local
+```
+
+Uzupełnij `.env.local`:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+```
+
+### 4. Migracje bazy danych
+
+W panelu Supabase → SQL Editor uruchom kolejno:
+
+```
+supabase/migrations/001_create_tables.sql
+supabase/migrations/002_rls_policies.sql
+supabase/migrations/003_functions.sql
+```
+
+Lub przy pomocy Supabase CLI:
+
+```bash
+npx supabase db push
+```
+
+### 5. Uruchomienie deweloperskie
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Aplikacja dostępna na http://localhost:3000
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 6. Budowanie produkcyjne
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Struktura projektu
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  (auth)/login/          # Strona logowania
+  (dashboard)/
+    page.tsx             # Dashboard główny
+    przejazdy/           # Ewidencja przejazdów
+    klienci/             # Zarządzanie klientami
+    pojazdy/             # Zarządzanie pojazdami
+    kierowcy/            # Zarządzanie kierowcami
+    paliwo/              # Faktury paliwowe
+    hotele/              # Przejazdy z hotelem
+    raporty/             # Raporty i eksport
+    import/              # Import z Excela
+    ustawienia/          # Profil użytkownika
+  api/                   # API routes
+    trips/
+    clients/
+    vehicles/
+    drivers/
+    fuel/
+    reports/
+    import/
+    export/
+components/
+  ui/                    # Button, Input, Modal, Badge...
+  layout/                # Sidebar, Header, MobileNav
+  trips/                 # TripForm
+lib/
+  supabase/              # client.ts, server.ts, admin.ts
+  types/                 # TypeScript interfaces
+  utils/                 # calculations, formatting, excel, export
+supabase/
+  migrations/            # SQL schema files
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Dokumentacja
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- [Konfiguracja i setup](docs/SETUP.md)
+- [Wdrożenie na Vercel](docs/DEPLOYMENT.md)
+- [Przewodnik importu Excel](docs/IMPORT_GUIDE.md)
 
-## Deploy on Vercel
+## Technologie
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| Technologia | Wersja |
+|-------------|--------|
+| Next.js | 14.2.13 |
+| React | 18 |
+| TypeScript | 5 |
+| Tailwind CSS | 3.4.1 |
+| Supabase | ^2.45.4 |
+| @supabase/ssr | ^0.5.1 |
+| react-hook-form | ^7.53.0 |
+| zod | ^3.23.8 |
+| SheetJS (xlsx) | ^0.18.5 |
+| jsPDF | ^2.5.1 |
+| lucide-react | ^0.441.0 |
+| date-fns | ^3.6.0 |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Licencja
+
+Prywatny projekt. Wszelkie prawa zastrzeżone.
+# Ewidencja
