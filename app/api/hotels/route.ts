@@ -9,6 +9,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('hotel_locations')
     .select('*')
+    .eq('user_id', user.id)
     .order('name')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
