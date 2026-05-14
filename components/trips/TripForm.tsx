@@ -472,10 +472,10 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
   return (
     <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])}>
-      <div className="flex flex-col xl:flex-row gap-6 items-start">
+      <div className="flex flex-col xl:flex-row gap-6 xl:items-start">
 
         {/* ─── LEFT: main form ─── */}
-        <div className="flex-1 min-w-0 space-y-5">
+        <div className="w-full flex-1 min-w-0 space-y-5">
 
           {/* Validation alerts */}
           {errCount > 0 && (
