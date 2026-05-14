@@ -499,14 +499,14 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
           {/* ── Section 1: Podstawowe dane ── */}
           <div className="surface overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white text-xs font-bold shrink-0">1</span>
               <div className="flex items-center gap-2">
                 <Car size={15} className="text-primary-600" />
                 <h3 className="font-semibold text-slate-800 text-sm">Podstawowe dane</h3>
               </div>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4">
               {defaultVehicle && (
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-50 border border-primary-100">
                   <Car size={16} className="text-primary-500 shrink-0" />
@@ -613,18 +613,20 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
           {/* ── Section 2: Trasy wyjazdu ── */}
           <div className="surface overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-2 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0">2</span>
-              <div className="flex items-center gap-2 flex-1">
-                <MapPin size={15} className="text-indigo-600" />
-                <h3 className="font-semibold text-slate-800 text-sm">Trasy wyjazdu</h3>
-              </div>              {/* Trip-level hotel selector */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
+                <MapPin size={15} className="text-indigo-600 shrink-0" />
+                <h3 className="font-semibold text-slate-800 text-sm truncate">Trasy wyjazdu</h3>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+              {/* Trip-level hotel selector */}
               <div className="relative" ref={tripHotelRef}>
                 {selectedTripHotel ? (
                   <div className="flex items-center gap-1">
-                    <span className="flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full">
-                      <Hotel size={11} />
-                      {selectedTripHotel.name}
+                    <span className="flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full max-w-[100px] sm:max-w-none">
+                      <Hotel size={11} className="shrink-0" />
+                      <span className="truncate">{selectedTripHotel.name}</span>
                     </span>
                     <button
                       type="button"
@@ -674,11 +676,13 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                     </div>
                   </div>
                 )}
-              </div>              <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-full">
-                {totalLegsKm} km łącznie
+              </div>
+              <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full whitespace-nowrap">
+                {totalLegsKm} km
               </span>
+              </div>
             </div>
-            <div className="p-5 space-y-3">
+            <div className="p-4 sm:p-5 space-y-3">
               {Object.entries(legsByDay).map(([day, dayLegs]) => (
                 <div key={day} className="rounded-lg border border-slate-100">
                   <div className="flex items-center justify-between bg-slate-50 px-3 py-2 border-b border-slate-100">
@@ -929,14 +933,14 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
           {/* ── Section 3: Paliwo ── */}
           <div className="surface overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500 text-white text-xs font-bold shrink-0">3</span>
               <div className="flex items-center gap-2">
                 <Droplets size={15} className="text-amber-600" />
                 <h3 className="font-semibold text-slate-800 text-sm">Paliwo</h3>
               </div>
             </div>
-            <div className="p-5 space-y-4">
+            <div className="p-4 sm:p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Paliwo początkowe (L)" type="number" step="0.01" placeholder="np. 45.0"
                   error={errors.fuel_start?.message} {...register('fuel_start')} />
@@ -1012,29 +1016,29 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
           {/* ── Section 4: Uwagi ── */}
           <div className="surface overflow-hidden">
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-slate-500 text-white text-xs font-bold shrink-0">4</span>
               <div className="flex items-center gap-2">
                 <FileText size={15} className="text-slate-500" />
                 <h3 className="font-semibold text-slate-800 text-sm">Uwagi</h3>
               </div>
             </div>
-            <div className="p-5">
+            <div className="p-4 sm:p-5">
               <Textarea label="" placeholder="Dodatkowe informacje o przejeździe..." {...register('notes')} />
             </div>
           </div>
 
           {/* Submit */}
-          <div className="flex gap-3 justify-end pb-6">
-            <Button type="button" variant="outline" onClick={() => router.back()}>Anuluj</Button>
-            <Button type="submit" loading={loading}>
+          <div className="flex gap-3 pb-6">
+            <Button type="button" variant="outline" onClick={() => router.back()} className="flex-1 sm:flex-none justify-center">Anuluj</Button>
+            <Button type="submit" loading={loading} className="flex-1 justify-center">
               {initialData ? 'Zapisz zmiany' : 'Dodaj przejazd'}
             </Button>
           </div>
         </div>
 
         {/* ─── RIGHT: sticky summary panel ─── */}
-        <div className="w-full xl:w-72 shrink-0 xl:sticky xl:top-4 space-y-4">
+        <div className="hidden xl:block xl:w-72 shrink-0 xl:sticky xl:top-4 space-y-4">
           <div className="surface overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-900">
               <h3 className="text-sm font-semibold text-white">Podsumowanie</h3>
