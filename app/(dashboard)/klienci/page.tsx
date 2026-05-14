@@ -1,7 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -10,111 +14,124 @@ import { ConfirmModal, Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { Spinner } from '@/components/ui/Spinner'
-import { Alert } from '@/components/ui/Alert'
 import type { Client } from '@/lib/types'
-import { Plus, Edit2, Trash2, Eye } from 'lucide-react'
+import { Plus, Edit2, Trash2, Eye, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+const clientSchema = z.object({
+  code: z.string().optional(),
+  name: z.string().min(1, 'Nazwa klienta jest wymagana'),
+  city: z.string().optional(),
+  distance_km: z
+    .string()
+    .optional()
+    .refine((v) => !v || !isNaN(parseFloat(v)), { message: 'Musi być liczbą' }),
+  notes: z.string().optional(),
+  is_active: z.boolean(),
+})
+type ClientForm = z.infer<typeof clientSchema>
+
+const defaultValues: ClientForm = {
+  code: '',
+  name: '',
+  city: '',
+  distance_km: '',
+  notes: '',
+  is_active: true,
+}
+
 export default function KlienciPage() {
-  const [clients, setClients] = useState<Client[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [hardDeleteId, setHardDeleteId] = useState<string | null>(null)
   const [editClient, setEditClient] = useState<Client | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [formLoading, setFormLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    city: '',
-    distance_km: '',
-    notes: '',
-    is_active: true
+
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<ClientForm>({
+    resolver: zodResolver(clientSchema),
+    defaultValues,
   })
 
-  const fetchClients = async () => {
-    setLoading(true)
-    try {
+  const { data: clients = [], isLoading } = useQuery<Client[]>({
+    queryKey: ['clients'],
+    queryFn: async () => {
       const res = await fetch('/api/clients')
       const { data } = await res.json()
-      setClients(data ?? [])
-    } catch {
-      toast.error('Błąd pobierania klientów')
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data ?? []
+    },
+  })
 
-  useEffect(() => { fetchClients() }, [])
+  const saveMutation = useMutation({
+    mutationFn: async (form: ClientForm) => {
+      const payload = {
+        ...form,
+        distance_km: form.distance_km ? parseFloat(form.distance_km) : null,
+        code: form.code || null,
+        city: form.city || null,
+        notes: form.notes || null,
+      }
+      const url = editClient ? `/api/clients/${editClient.id}` : '/api/clients'
+      const method = editClient ? 'PATCH' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error((await res.json()).error)
+    },
+    onSuccess: () => {
+      toast.success(editClient ? 'Klient zaktualizowany' : 'Klient dodany')
+      setShowForm(false)
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Błąd zapisu'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/clients/${id}`, { method: 'DELETE' }).then((r) => {
+        if (!r.ok) throw new Error()
+      }),
+    onSuccess: () => {
+      toast.success('Klient dezaktywowany')
+      setDeleteId(null)
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+    onError: () => toast.error('Błąd usuwania klienta'),
+  })
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/clients/${id}?force=true`, { method: 'DELETE' }).then((r) => {
+        if (!r.ok) throw new Error()
+      }),
+    onSuccess: () => {
+      toast.success('Klient usunięty')
+      setHardDeleteId(null)
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+    },
+    onError: () => toast.error('Błąd usuwania klienta'),
+  })
 
   const openAdd = () => {
     setEditClient(null)
-    setFormData({ code: '', name: '', city: '', distance_km: '', notes: '', is_active: true })
+    reset(defaultValues)
     setShowForm(true)
   }
 
   const openEdit = (client: Client) => {
     setEditClient(client)
-    setFormData({
+    reset({
       code: client.code ?? '',
       name: client.name,
       city: client.city ?? '',
       distance_km: client.distance_km != null ? String(client.distance_km) : '',
       notes: client.notes ?? '',
-      is_active: client.is_active
+      is_active: client.is_active,
     })
     setShowForm(true)
-  }
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Nazwa klienta jest wymagana')
-      return
-    }
-    setFormLoading(true)
-    try {
-      const payload = {
-        ...formData,
-        distance_km: formData.distance_km ? parseFloat(formData.distance_km) : null,
-        code: formData.code || null,
-        city: formData.city || null,
-        notes: formData.notes || null
-      }
-
-      const url = editClient ? `/api/clients/${editClient.id}` : '/api/clients'
-      const method = editClient ? 'PATCH' : 'POST'
-
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      })
-      if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error)
-      }
-      toast.success(editClient ? 'Klient zaktualizowany' : 'Klient dodany')
-      setShowForm(false)
-      fetchClients()
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Błąd zapisu')
-    } finally {
-      setFormLoading(false)
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deleteId) return
-    try {
-      const res = await fetch(`/api/clients/${deleteId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
-      toast.success('Klient dezaktywowany')
-      setDeleteId(null)
-      fetchClients()
-    } catch {
-      toast.error('Błąd usuwania klienta')
-    }
   }
 
   const filtered = clients.filter((c) => {
@@ -171,7 +188,7 @@ export default function KlienciPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {loading ? (
+              {isLoading ? (
                 <tr>
                   <td colSpan={6} className="text-center py-10">
                     <Spinner />
@@ -213,8 +230,16 @@ export default function KlienciPage() {
                         <button
                           onClick={() => setDeleteId(client.id)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Dezaktywuj"
                         >
                           <Trash2 size={15} />
+                        </button>
+                        <button
+                          onClick={() => setHardDeleteId(client.id)}
+                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-700 hover:bg-red-100 transition-colors"
+                          title="Usuń trwale"
+                        >
+                          <XCircle size={15} />
                         </button>
                       </div>
                     </td>
@@ -229,7 +254,6 @@ export default function KlienciPage() {
         </div>
       </div>
 
-      {/* Client form modal */}
       <Modal
         open={showForm}
         onClose={() => setShowForm(false)}
@@ -238,7 +262,12 @@ export default function KlienciPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowForm(false)}>Anuluj</Button>
-            <Button onClick={handleSave} loading={formLoading}>Zapisz</Button>
+            <Button
+              onClick={handleSubmit((data) => saveMutation.mutate(data))}
+              loading={saveMutation.isPending}
+            >
+              Zapisz
+            </Button>
           </>
         }
       >
@@ -247,41 +276,36 @@ export default function KlienciPage() {
             <Input
               label="Kod klienta"
               placeholder="np. KL-001"
-              value={formData.code}
-              onChange={(e) => setFormData((f) => ({ ...f, code: e.target.value }))}
+              {...register('code')}
+              error={errors.code?.message}
             />
             <Input
               label="Nazwa klienta *"
               placeholder="Nazwa firmy lub osoby"
-              value={formData.name}
-              onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))}
+              {...register('name')}
+              error={errors.name?.message}
             />
             <Input
               label="Miejscowość"
               placeholder="np. Warszawa"
-              value={formData.city}
-              onChange={(e) => setFormData((f) => ({ ...f, city: e.target.value }))}
+              {...register('city')}
+              error={errors.city?.message}
             />
             <Input
               label="Standardowa odległość (km)"
               type="number"
               placeholder="np. 150"
-              value={formData.distance_km}
-              onChange={(e) => setFormData((f) => ({ ...f, distance_km: e.target.value }))}
+              {...register('distance_km')}
+              error={errors.distance_km?.message}
             />
           </div>
           <Textarea
             label="Uwagi"
-            value={formData.notes}
-            onChange={(e) => setFormData((f) => ({ ...f, notes: e.target.value }))}
+            {...register('notes')}
+            error={errors.notes?.message}
           />
           <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input
-              type="checkbox"
-              checked={formData.is_active}
-              onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))}
-              className="rounded"
-            />
+            <input type="checkbox" {...register('is_active')} className="rounded" />
             <span>Aktywny</span>
           </label>
         </div>
@@ -290,11 +314,19 @@ export default function KlienciPage() {
       <ConfirmModal
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         title="Dezaktywuj klienta"
         message="Czy na pewno chcesz dezaktywować tego klienta? Dane przejazdów zostaną zachowane."
         confirmLabel="Dezaktywuj"
       />
-    </div>
+      <ConfirmModal
+        open={!!hardDeleteId}
+        onClose={() => setHardDeleteId(null)}
+        onConfirm={() => hardDeleteId && hardDeleteMutation.mutate(hardDeleteId)}
+        title="Usuń klienta trwale"
+        message="Uwaga! Klient zostanie trwale usunięty z bazy danych. Tej operacji nie można cofnąć."
+        confirmLabel="Usuń trwale"
+        variant="danger"
+      />    </div>
   )
 }

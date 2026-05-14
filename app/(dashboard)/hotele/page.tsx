@@ -1,6 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -11,23 +15,29 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Select } from '@/components/ui/Select'
 import { Spinner } from '@/components/ui/Spinner'
 import type { HotelLocation, HotelClientDistance, Client } from '@/lib/types'
-import { Plus, Edit2, Trash2, Hotel, Users } from 'lucide-react'
+import { Plus, Edit2, Trash2, Hotel, Users, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+const hotelSchema = z.object({
+  name: z.string().min(1, 'Nazwa hotelu jest wymagana'),
+  city: z.string().optional(),
+  notes: z.string().optional(),
+  is_active: z.boolean(),
+})
+type HotelForm = z.infer<typeof hotelSchema>
+
 export default function HotelePage() {
-  const [hotels, setHotels] = useState<HotelLocation[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showInactive, setShowInactive] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [hardDeleteId, setHardDeleteId] = useState<string | null>(null)
   const [editHotel, setEditHotel] = useState<HotelLocation | null>(null)
   const [showForm, setShowForm] = useState(false)
-  const [formLoading, setFormLoading] = useState(false)
-  const [formData, setFormData] = useState({
-    name: '',
-    city: '',
-    notes: '',
-    is_active: true,
+
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<HotelForm>({
+    resolver: zodResolver(hotelSchema),
+    defaultValues: { name: '', city: '', notes: '', is_active: true },
   })
 
   // --- clients modal state ---
@@ -42,22 +52,61 @@ export default function HotelePage() {
   const [savingEntry, setSavingEntry] = useState(false)
   const [deleteEntryId, setDeleteEntryId] = useState<string | null>(null)
 
-  const fetchHotels = async () => {
-    setLoading(true)
-    try {
+  const { data: hotels = [], isLoading: loading } = useQuery<HotelLocation[]>({
+    queryKey: ['hotels'],
+    queryFn: async () => {
       const res = await fetch('/api/hotels')
       const { data } = await res.json()
-      setHotels(data ?? [])
-    } catch {
-      toast.error('Błąd pobierania hoteli')
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data ?? []
+    },
+  })
 
-  useEffect(() => {
-    fetchHotels()
-  }, [])
+  const saveMutation = useMutation({
+    mutationFn: async (form: HotelForm) => {
+      const payload = {
+        name: form.name.trim(),
+        city: form.city?.trim() || null,
+        notes: form.notes?.trim() || null,
+        is_active: form.is_active,
+      }
+      const url = editHotel ? `/api/hotels/${editHotel.id}` : '/api/hotels'
+      const method = editHotel ? 'PATCH' : 'POST'
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error((await res.json()).error ?? 'Błąd zapisu')
+    },
+    onSuccess: () => {
+      toast.success(editHotel ? 'Hotel zaktualizowany' : 'Hotel dodany')
+      setShowForm(false)
+      queryClient.invalidateQueries({ queryKey: ['hotels'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Błąd zapisu'),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/hotels/${id}`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error() }),
+    onSuccess: () => {
+      toast.success('Hotel dezaktywowany')
+      setDeleteId(null)
+      queryClient.invalidateQueries({ queryKey: ['hotels'] })
+    },
+    onError: () => toast.error('Błąd usuwania hotelu'),
+  })
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/hotels/${id}?force=true`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error() }),
+    onSuccess: () => {
+      toast.success('Hotel usunięty')
+      setHardDeleteId(null)
+      queryClient.invalidateQueries({ queryKey: ['hotels'] })
+    },
+    onError: () => toast.error('Błąd usuwania hotelu'),
+  })
 
   const fetchHotelClients = useCallback(async (hotelId: string) => {
     setClientsLoading(true)
@@ -165,13 +214,13 @@ export default function HotelePage() {
 
   const openAdd = () => {
     setEditHotel(null)
-    setFormData({ name: '', city: '', notes: '', is_active: true })
+    reset({ name: '', city: '', notes: '', is_active: true })
     setShowForm(true)
   }
 
   const openEdit = (hotel: HotelLocation) => {
     setEditHotel(hotel)
-    setFormData({
+    reset({
       name: hotel.name,
       city: hotel.city ?? '',
       notes: hotel.notes ?? '',
@@ -179,54 +228,6 @@ export default function HotelePage() {
     })
     setShowForm(true)
   }
-
-  const handleSave = async () => {
-    if (!formData.name.trim()) {
-      toast.error('Nazwa hotelu jest wymagana')
-      return
-    }
-    setFormLoading(true)
-    try {
-      const payload = {
-        name: formData.name.trim(),
-        city: formData.city.trim() || null,
-        notes: formData.notes.trim() || null,
-        is_active: formData.is_active,
-      }
-      const url = editHotel ? `/api/hotels/${editHotel.id}` : '/api/hotels'
-      const method = editHotel ? 'PATCH' : 'POST'
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) {
-        const body = await res.json()
-        throw new Error(body.error ?? 'Blad zapisu')
-      }
-      toast.success(editHotel ? 'Hotel zaktualizowany' : 'Hotel dodany')
-      setShowForm(false)
-      fetchHotels()
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Błąd zapisu')
-    } finally {
-      setFormLoading(false)
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!deleteId) return
-    try {
-      const res = await fetch(`/api/hotels/${deleteId}`, { method: 'DELETE' })
-      if (!res.ok) throw new Error()
-      toast.success('Hotel dezaktywowany')
-      setDeleteId(null)
-      fetchHotels()
-    } catch {
-      toast.error('Błąd usuwania hotelu')
-    }
-  }
-
   const filtered = hotels.filter((h) => {
     if (!showInactive && !h.is_active) return false
     if (!search) return true
@@ -333,6 +334,13 @@ export default function HotelePage() {
                         >
                           <Trash2 size={14} />
                         </button>
+                        <button
+                          onClick={() => setHardDeleteId(hotel.id)}
+                          className="p-1.5 rounded hover:bg-red-100 text-gray-400 hover:text-red-700"
+                          title="Usuń trwale"
+                        >
+                          <XCircle size={14} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -352,7 +360,7 @@ export default function HotelePage() {
             <Button variant="outline" onClick={() => setShowForm(false)}>
               Anuluj
             </Button>
-            <Button onClick={handleSave} loading={formLoading}>
+            <Button onClick={handleSubmit((data) => saveMutation.mutate(data))} loading={saveMutation.isPending}>
               {editHotel ? 'Zapisz zmiany' : 'Dodaj hotel'}
             </Button>
           </div>
@@ -361,30 +369,25 @@ export default function HotelePage() {
         <div className="space-y-4">
           <Input
             label="Nazwa hotelu *"
-            value={formData.name}
-            onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+            {...register('name')}
+            error={errors.name?.message}
             placeholder="np. Hotel Novotel Kraków"
           />
           <Input
             label="Miejscowość"
-            value={formData.city}
-            onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
+            {...register('city')}
+            error={errors.city?.message}
             placeholder="np. Kraków"
           />
           <Textarea
             label="Uwagi"
-            value={formData.notes}
-            onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
+            {...register('notes')}
+            error={errors.notes?.message}
             placeholder="Dodatkowe informacje..."
           />
           {editHotel && (
             <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.is_active}
-                onChange={(e) => setFormData((p) => ({ ...p, is_active: e.target.checked }))}
-                className="rounded"
-              />
+              <input type="checkbox" {...register('is_active')} className="rounded" />
               Aktywny
             </label>
           )}
@@ -394,13 +397,21 @@ export default function HotelePage() {
       <ConfirmModal
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         title="Dezaktywuj hotel"
         message="Hotel zostanie ukryty z listy. Dane historyczne pozostaną."
         confirmLabel="Dezaktywuj"
         variant="danger"
       />
-
+      <ConfirmModal
+        open={!!hardDeleteId}
+        onClose={() => setHardDeleteId(null)}
+        onConfirm={() => hardDeleteId && hardDeleteMutation.mutate(hardDeleteId)}
+        title="Usuń hotel trwale"
+        message="Uwaga! Hotel zostanie trwale usunięty z bazy danych wraz z przypisanymi klientami. Tej operacji nie można cofnąć."
+        confirmLabel="Usuń trwale"
+        variant="danger"
+      />
       {/* Clients modal */}
       <Modal
         open={!!clientsHotel}

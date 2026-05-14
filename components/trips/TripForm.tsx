@@ -79,55 +79,58 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
   // Hotels
   const activeHotels = initialHotels.filter((h) => h.is_active)
-  const [hotelDropdownIdx, setHotelDropdownIdx] = useState<number | null>(null)
-  const hotelDropdownRef = useRef<HTMLDivElement>(null)
+  const [availableHotels, setAvailableHotels] = useState<HotelLocation[]>(activeHotels)
 
-  // Close hotel dropdown on outside click
+  // Single trip-level hotel
+  const initHotelId = initialData?.trip_legs?.find((l) => l.hotel_id)?.hotel_id ?? null
+  const initHotel = initHotelId ? (initialHotels.find((h) => h.id === initHotelId) ?? null) : null
+  const [selectedTripHotel, setSelectedTripHotel] = useState<HotelLocation | null>(initHotel)
+  const [tripHotelDropdownOpen, setTripHotelDropdownOpen] = useState(false)
+  const tripHotelRef = useRef<HTMLDivElement>(null)
+  const [legHotelOpen, setLegHotelOpen] = useState<number | null>(null)
+
+  // Close trip hotel dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (hotelDropdownRef.current && !hotelDropdownRef.current.contains(e.target as Node)) {
-        setHotelDropdownIdx(null)
+      if (tripHotelRef.current && !tripHotelRef.current.contains(e.target as Node)) {
+        setTripHotelDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  function legIsFirst(idx: number): boolean {
-    const day = legs[idx]?.day
-    const dayLegs = legs.filter((l) => l.day === day)
-    const posInDay = dayLegs.findIndex((_, i) => legs.indexOf(dayLegs[i]) === idx)
-    return posInDay % 2 === 0
+  function applyHotelToAllLegs(hotel: HotelLocation) {
+    const clientCity = selectedClientCity?.trim() || ''
+    const hotelKm = (hotel as HotelLocation & { distance_km?: number | null }).distance_km
+    setSelectedTripHotel(hotel)
+    setTripHotelDropdownOpen(false)
+    setLegs((prev) => {
+      if (prev.length < 3) return prev
+      return prev.map((l, i, arr) => {
+        if (i === 0 || i === arr.length - 1) return { ...l, hotel_id: null }
+        let posInDay = 0
+        for (let j = 0; j < i; j++) { if (arr[j].day === l.day) posInDay++ }
+        const isFirst = posInDay % 2 === 0
+        const km = hotelKm != null ? hotelKm : l.km
+        return isFirst
+          ? { ...l, from: hotel.name, to: clientCity, km, hotel_id: hotel.id }
+          : { ...l, from: clientCity, to: hotel.name, km, hotel_id: hotel.id }
+      })
+    })
   }
 
-  function applyHotelToLeg(idx: number, hotel: HotelLocation) {
+  function removeHotelFromAllLegs() {
     const clientCity = selectedClientCity?.trim() || ''
-    const isFirst = legIsFirst(idx)
-    setLegs((prev) => prev.map((l, i) => {
-      if (i !== idx) return l
-      return {
-        ...l,
-        from: isFirst ? hotel.name : clientCity,
-        to: isFirst ? clientCity : hotel.name,
-        hotel_id: hotel.id
-      }
+    const km = selectedClientKm ?? 0
+    setSelectedTripHotel(null)
+    setLegs((prev) => prev.map((l, i, arr) => {
+      if (i === 0 || i === arr.length - 1) return { ...l, hotel_id: null }
+      let posInDay = 0
+      for (let j = 0; j < i; j++) { if (arr[j].day === l.day) posInDay++ }
+      const isFirst = posInDay % 2 === 0
+      return { ...l, from: isFirst ? HOME_CITY : clientCity, to: isFirst ? clientCity : HOME_CITY, km, hotel_id: null }
     }))
-    setHotelDropdownIdx(null)
-  }
-
-  function removeHotelFromLeg(idx: number) {
-    const clientCity = selectedClientCity?.trim() || ''
-    const isFirst = legIsFirst(idx)
-    setLegs((prev) => prev.map((l, i) => {
-      if (i !== idx) return l
-      return {
-        ...l,
-        from: isFirst ? HOME_CITY : clientCity,
-        to: isFirst ? clientCity : HOME_CITY,
-        hotel_id: null
-      }
-    }))
-    setHotelDropdownIdx(null)
   }
 
 
@@ -280,9 +283,24 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
   // Client search helpers
   const filteredClients = clients
-    .filter((c) => c.is_active && c.name.toLowerCase().includes(clientSearch.toLowerCase()))
+    .filter((c) => {
+      if (!c.is_active) return false
+      const q = clientSearch.trim().toLowerCase()
+      if (!q) return false
+      return (
+        c.name.toLowerCase().includes(q) ||
+        (c.code != null && c.code.toLowerCase().includes(q))
+      )
+    })
     .slice(0, 8)
-  const exactMatch = clients.some((c) => c.name.toLowerCase() === clientSearch.toLowerCase())
+  const exactMatch = clients.some((c) => {
+    const q = clientSearch.trim().toLowerCase()
+    if (!q) return false
+    return (
+      c.name.toLowerCase() === q ||
+      (c.code != null && c.code.toLowerCase() === q)
+    )
+  })
 
   function handleClientSelect(client: Client) {
     setValue('client_id', client.id)
@@ -301,6 +319,11 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
         return { ...l, from: isEven ? HOME_CITY : dest, to: isEven ? dest : HOME_CITY, km }
       })
     })
+    // Fetch hotels assigned to this client
+    fetch(`/api/hotels?client_id=${client.id}`)
+      .then((r) => r.json())
+      .then(({ data }) => setAvailableHotels((data ?? []).filter((h: HotelLocation) => h.is_active)))
+      .catch(() => {})
   }
 
   async function handleCreateClient() {
@@ -330,6 +353,8 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     setSelectedClientCity(null)
     setValue('client_id', '')
     setClientDropdownOpen(true)
+    setAvailableHotels(activeHotels)
+    setSelectedTripHotel(null)
   }
 
   // Leg helpers
@@ -351,6 +376,32 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   function swapLeg(idx: number) {
     setLegs((prev) => prev.map((l, i) => i === idx ? { ...l, from: l.to, to: l.from } : l))
   }
+
+  function updateLegHotel(idx: number, hotel: HotelLocation | null) {
+    const clientCity = selectedClientCity?.trim() || ''
+    const hotelKm = hotel ? (hotel as HotelLocation & { distance_km?: number | null }).distance_km : null
+    setLegs((prev) => prev.map((l, i) => {
+      if (i !== idx) return l
+      let posInDay = 0
+      for (let j = 0; j < i; j++) { if (prev[j].day === l.day) posInDay++ }
+      const isFirst = posInDay % 2 === 0
+      if (!hotel) {
+        const km = selectedClientKm ?? 0
+        return { ...l, from: isFirst ? HOME_CITY : clientCity, to: isFirst ? clientCity : HOME_CITY, km, hotel_id: null }
+      }
+      const km = hotelKm != null ? hotelKm : l.km
+      return isFirst
+        ? { ...l, from: hotel.name, to: clientCity, km, hotel_id: hotel.id }
+        : { ...l, from: clientCity, to: hotel.name, km, hotel_id: hotel.id }
+    }))
+  }
+
+  useEffect(() => {
+    if (legHotelOpen === null) return
+    function handleClose() { setLegHotelOpen(null) }
+    document.addEventListener('click', handleClose)
+    return () => document.removeEventListener('click', handleClose)
+  }, [legHotelOpen])
 
   // Days count
   const tripDays =
@@ -521,7 +572,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                     {(selectedClientName || clientSearch) && (
                       <button
                         type="button"
-                        onClick={() => { setClientSearch(''); setSelectedClientName(''); setValue('client_id', '') }}
+                        onClick={() => { setClientSearch(''); setSelectedClientName(''); setValue('client_id', ''); setAvailableHotels(activeHotels); setSelectedTripHotel(null) }}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition"
                       >
                         ✕
@@ -567,8 +618,63 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
               <div className="flex items-center gap-2 flex-1">
                 <MapPin size={15} className="text-indigo-600" />
                 <h3 className="font-semibold text-slate-800 text-sm">Trasy wyjazdu</h3>
-              </div>
-              <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-full">
+              </div>              {/* Trip-level hotel selector */}
+              <div className="relative" ref={tripHotelRef}>
+                {selectedTripHotel ? (
+                  <div className="flex items-center gap-1">
+                    <span className="flex items-center gap-1 text-xs font-medium text-purple-700 bg-purple-100 px-2.5 py-1 rounded-full">
+                      <Hotel size={11} />
+                      {selectedTripHotel.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={removeHotelFromAllLegs}
+                      className="text-xs text-purple-400 hover:text-red-500 transition p-0.5"
+                      title="Usu\u0144 hotel"
+                    >✕</button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setTripHotelDropdownOpen(!tripHotelDropdownOpen)}
+                    className="flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-purple-600 hover:bg-purple-50 px-2.5 py-1 rounded-full transition"
+                  >
+                    <Hotel size={11} />Hotel
+                  </button>
+                )}
+                {tripHotelDropdownOpen && (
+                  <div className="absolute right-0 top-full mt-1 z-[100] bg-white border border-slate-200 rounded-lg shadow-lg min-w-[220px] overflow-hidden">
+                    <div className="px-3 pt-3 pb-2 border-b border-slate-100">
+                      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Wybierz hotel</p>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto py-1">
+                      {availableHotels.length === 0 ? (
+                        <p className="px-3 py-4 text-xs text-slate-400 text-center">Brak hoteli przypisanych do klienta</p>
+                      ) : (
+                        availableHotels.map((h) => (
+                          <button
+                            key={h.id}
+                            type="button"
+                            onMouseDown={() => applyHotelToAllLegs(h)}
+                            className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 transition
+                              ${selectedTripHotel?.id === h.id ? 'bg-purple-50 text-purple-700' : 'hover:bg-slate-50 text-slate-800'}`}
+                          >
+                            <div className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0
+                              ${selectedTripHotel?.id === h.id ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                              <Hotel size={13} />
+                            </div>
+                            <span className="flex-1 min-w-0">
+                              <span className="block font-medium truncate">{h.name}</span>
+                              {h.city && <span className="block text-xs text-slate-400 truncate">{h.city}</span>}
+                            </span>
+                            {selectedTripHotel?.id === h.id && <CheckCircle2 size={14} className="text-purple-500 shrink-0" />}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>              <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-full">
                 {totalLegsKm} km łącznie
               </span>
             </div>
@@ -588,135 +694,192 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                       <Plus size={12} />dodaj etap
                     </button>
                   </div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="text-left px-3 py-2 text-xs text-slate-400 font-medium">Skąd</th>
-                        <th className="w-6"></th>
-                        <th className="text-left px-3 py-2 text-xs text-slate-400 font-medium">Dokąd</th>
-                        <th className="text-right px-3 py-2 text-xs text-slate-400 font-medium w-20">km</th>
-                        <th className="w-20"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dayLegs.map(({ leg, idx }) => (
-                        <tr key={idx} className="border-b border-gray-50 last:border-0 group hover:bg-slate-50/70 transition-colors">
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="text"
-                              value={leg.from}
-                              onChange={(e) => updateLeg(idx, 'from', e.target.value)}
-                              placeholder="Skąd"
-                              className="w-full px-2 py-1 text-sm rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition"
-                            />
-                          </td>
-                          <td className="text-center px-0">
-                            <div className="flex flex-col items-center gap-0.5">
-                              <ArrowRight size={11} className="text-slate-300" />
-                            </div>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="text"
-                              value={leg.to}
-                              onChange={(e) => updateLeg(idx, 'to', e.target.value)}
-                              placeholder="Dokąd"
-                              className="w-full px-2 py-1 text-sm rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition"
-                            />
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <input
-                              type="number"
-                              value={leg.km}
-                              onChange={(e) => updateLeg(idx, 'km', e.target.value)}
-                              className="w-full px-2 py-1 text-sm text-right rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition font-medium"
-                              min="0"
-                            />
-                          </td>
-                          <td className="px-1 py-1.5">
-                            <div className="flex items-center justify-center gap-0.5">
+                  {/* Desktop header */}
+                  <div className="hidden sm:grid grid-cols-[1fr_20px_1fr_80px_76px] border-b border-slate-100">
+                    <div className="text-left px-3 py-2 text-xs text-slate-400 font-medium">Skąd</div>
+                    <div />
+                    <div className="text-left px-3 py-2 text-xs text-slate-400 font-medium">Dokąd</div>
+                    <div className="text-right px-3 py-2 text-xs text-slate-400 font-medium">km</div>
+                    <div />
+                  </div>
+                  {dayLegs.map(({ leg, idx }) => (
+                    <div key={idx} className="border-b border-gray-50 last:border-0 group">
+                      {/* Mobile: card */}
+                      <div className="sm:hidden px-3 py-2.5 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={leg.from}
+                            onChange={(e) => updateLeg(idx, 'from', e.target.value)}
+                            placeholder="Skąd"
+                            className="flex-1 min-w-0 px-2 py-1.5 text-sm rounded-lg border border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-white transition"
+                          />
+                          <ArrowRight size={13} className="shrink-0 text-slate-300" />
+                          <input
+                            type="text"
+                            value={leg.to}
+                            onChange={(e) => updateLeg(idx, 'to', e.target.value)}
+                            placeholder="Dokąd"
+                            className="flex-1 min-w-0 px-2 py-1.5 text-sm rounded-lg border border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-white transition"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-slate-400 shrink-0">km:</span>
+                          <input
+                            type="number"
+                            value={leg.km}
+                            onChange={(e) => updateLeg(idx, 'km', e.target.value)}
+                            className="w-20 px-2 py-1.5 text-sm text-right rounded-lg border border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-white transition font-medium"
+                            min="0"
+                          />
+                          <div className="flex-1" />
+                          {/* Per-leg hotel button (mobile) */}
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setLegHotelOpen(legHotelOpen === idx ? null : idx) }}
+                              className={`p-2 rounded-lg transition ${
+                                leg.hotel_id ? 'text-purple-500 hover:text-purple-700 hover:bg-purple-50' : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'
+                              }`}
+                              title={leg.hotel_id ? 'Zmień hotel' : 'Dodaj hotel'}
+                            >
+                              <Hotel size={14} />
+                            </button>
+                            {legHotelOpen === idx && (
+                              <div
+                                className="absolute right-0 bottom-full mb-1 z-[200] bg-white border border-slate-200 rounded-lg shadow-lg min-w-[190px] overflow-hidden"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {leg.hotel_id && (
+                                  <button type="button" onMouseDown={() => { updateLegHotel(idx, null); setLegHotelOpen(null) }}
+                                    className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-b border-slate-100">
+                                    ✕ Usuń hotel
+                                  </button>
+                                )}
+                                {availableHotels.length === 0
+                                  ? <p className="px-3 py-3 text-xs text-slate-400 text-center">Brak hoteli dla klienta</p>
+                                  : availableHotels.map((h) => (
+                                    <button key={h.id} type="button" onMouseDown={() => { updateLegHotel(idx, h); setLegHotelOpen(null) }}
+                                      className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 transition ${
+                                        leg.hotel_id === h.id ? 'bg-purple-50 text-purple-700' : 'hover:bg-slate-50 text-slate-800'
+                                      }`}>
+                                      <Hotel size={12} className={leg.hotel_id === h.id ? 'text-purple-500' : 'text-slate-400'} />
+                                      {h.name}
+                                    </button>
+                                  ))
+                                }
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => swapLeg(idx)}
+                            title="Zamień kierunek"
+                            className="p-2 rounded-lg text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 transition"
+                          >
+                            <ArrowLeftRight size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeLeg(idx)}
+                            className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Desktop: grid row */}
+                      <div className="hidden sm:grid grid-cols-[1fr_20px_1fr_80px_76px] items-center hover:bg-slate-50/70 transition-colors">
+                        <div className="px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={leg.from}
+                            onChange={(e) => updateLeg(idx, 'from', e.target.value)}
+                            placeholder="Skąd"
+                            className="w-full px-2 py-1 text-sm rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition"
+                          />
+                        </div>
+                        <div className="text-center">
+                          <ArrowRight size={11} className="text-slate-300" />
+                        </div>
+                        <div className="px-2 py-1.5">
+                          <input
+                            type="text"
+                            value={leg.to}
+                            onChange={(e) => updateLeg(idx, 'to', e.target.value)}
+                            placeholder="Dokąd"
+                            className="w-full px-2 py-1 text-sm rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition"
+                          />
+                        </div>
+                        <div className="px-2 py-1.5">
+                          <input
+                            type="number"
+                            value={leg.km}
+                            onChange={(e) => updateLeg(idx, 'km', e.target.value)}
+                            className="w-full px-2 py-1 text-sm text-right rounded-lg border border-transparent group-hover:border-slate-200 focus:border-primary-400 focus:ring-1 focus:ring-primary-200 focus:outline-none bg-transparent transition font-medium"
+                            min="0"
+                          />
+                        </div>
+                        <div className="px-1 py-1.5">
+                          <div className="flex items-center justify-center gap-0.5">
+                            {/* Per-leg hotel button (desktop) */}
+                            <div className="relative">
                               <button
                                 type="button"
-                                onClick={() => swapLeg(idx)}
-                                title="Zamień kierunek"
-                                className="p-1 rounded-lg text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 transition"
+                                onClick={(e) => { e.stopPropagation(); setLegHotelOpen(legHotelOpen === idx ? null : idx) }}
+                                className={`p-1 rounded-lg transition ${
+                                  leg.hotel_id ? 'text-purple-500 hover:text-purple-700 hover:bg-purple-50' : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'
+                                }`}
+                                title={leg.hotel_id ? 'Zmień hotel' : 'Dodaj hotel'}
                               >
-                                <ArrowLeftRight size={12} />
+                                <Hotel size={12} />
                               </button>
-                              {activeHotels.length > 0 && (
-                                <div className="relative" ref={hotelDropdownIdx === idx ? hotelDropdownRef : undefined}>
-                                  <button
-                                    type="button"
-                                    onClick={() => setHotelDropdownIdx(hotelDropdownIdx === idx ? null : idx)}
-                                    title={leg.hotel_id ? activeHotels.find(h => h.id === leg.hotel_id)?.name ?? 'Hotel' : 'Wybierz hotel'}
-                                    className={`flex items-center gap-1 px-1.5 py-1 rounded-lg text-xs font-medium transition max-w-[90px] truncate
-                                      ${leg.hotel_id
-                                        ? 'text-purple-700 bg-purple-100 hover:bg-purple-200'
-                                        : 'text-slate-300 hover:text-purple-500 hover:bg-purple-50'}`}
-                                  >
-                                    <Hotel size={11} className="shrink-0" />
-                                    {leg.hotel_id && (
-                                      <span className="truncate">
-                                        {activeHotels.find(h => h.id === leg.hotel_id)?.name ?? ''}
-                                      </span>
-                                    )}
-                                  </button>
-                                  {hotelDropdownIdx === idx && (
-                                    <div className="absolute right-0 top-full mt-1 z-[100] bg-white border border-slate-200 rounded-lg shadow-lg min-w-[220px] overflow-hidden">
-                                      <div className="px-3 pt-3 pb-2 border-b border-slate-100">
-                                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Wybierz hotel</p>
-                                      </div>
-                                      <div className="max-h-56 overflow-y-auto py-1">
-                                        {activeHotels.map((h) => (
-                                          <button
-                                            key={h.id}
-                                            type="button"
-                                            onMouseDown={() => applyHotelToLeg(idx, h)}
-                                            className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2.5 transition
-                                              ${leg.hotel_id === h.id ? 'bg-purple-50 text-purple-700' : 'hover:bg-slate-50 text-slate-800'}`}
-                                          >
-                                            <div className={`flex items-center justify-center w-7 h-7 rounded-lg shrink-0
-                                              ${leg.hotel_id === h.id ? 'bg-purple-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                              <Hotel size={13} />
-                                            </div>
-                                            <span className="flex-1 min-w-0">
-                                              <span className="block font-medium truncate">{h.name}</span>
-                                              {h.city && <span className="block text-xs text-slate-400 truncate">{h.city}</span>}
-                                            </span>
-                                            {leg.hotel_id === h.id && (
-                                              <CheckCircle2 size={14} className="text-purple-500 shrink-0" />
-                                            )}
-                                          </button>
-                                        ))}
-                                      </div>
-                                      {leg.hotel_id && (
-                                        <div className="border-t border-slate-100 p-1">
-                                          <button
-                                            type="button"
-                                            onMouseDown={() => removeHotelFromLeg(idx)}
-                                            className="w-full text-left px-3 py-2 text-xs text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition flex items-center gap-2"
-                                          >
-                                            <Trash2 size={11} />Usuń hotel z etapu
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
+                              {legHotelOpen === idx && (
+                                <div
+                                  className="absolute right-0 top-full mt-1 z-[200] bg-white border border-slate-200 rounded-lg shadow-lg min-w-[190px] overflow-hidden"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {leg.hotel_id && (
+                                    <button type="button" onMouseDown={() => { updateLegHotel(idx, null); setLegHotelOpen(null) }}
+                                      className="w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-red-50 flex items-center gap-2 border-b border-slate-100">
+                                      ✕ Usuń hotel
+                                    </button>
                                   )}
+                                  {availableHotels.length === 0
+                                    ? <p className="px-3 py-3 text-xs text-slate-400 text-center">Brak hoteli dla klienta</p>
+                                    : availableHotels.map((h) => (
+                                      <button key={h.id} type="button" onMouseDown={() => { updateLegHotel(idx, h); setLegHotelOpen(null) }}
+                                        className={`w-full text-left px-3 py-2.5 text-sm flex items-center gap-2 transition ${
+                                          leg.hotel_id === h.id ? 'bg-purple-50 text-purple-700' : 'hover:bg-slate-50 text-slate-800'
+                                        }`}>
+                                        <Hotel size={12} className={leg.hotel_id === h.id ? 'text-purple-500' : 'text-slate-400'} />
+                                        {h.name}
+                                      </button>
+                                    ))
+                                  }
                                 </div>
                               )}
-                              <button
-                                type="button"
-                                onClick={() => removeLeg(idx)}
-                                className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
-                              >
-                                <Trash2 size={12} />
-                              </button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            <button
+                              type="button"
+                              onClick={() => swapLeg(idx)}
+                              title="Zamień kierunek"
+                              className="p-1 rounded-lg text-slate-300 hover:text-indigo-500 hover:bg-indigo-50 transition"
+                            >
+                              <ArrowLeftRight size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeLeg(idx)}
+                              className="p-1 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
               {legs.length === 0 && (

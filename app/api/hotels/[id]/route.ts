@@ -27,7 +27,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
@@ -35,6 +35,14 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
+  const force = new URL(req.url).searchParams.get('force') === 'true'
+
+  if (force) {
+    const { error } = await supabase.from('hotel_locations').delete().eq('id', id).eq('user_id', user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+
   const { error } = await supabase
     .from('hotel_locations')
     .update({ is_active: false, updated_at: new Date().toISOString() })

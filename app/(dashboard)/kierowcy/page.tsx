@@ -1,6 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
@@ -8,93 +12,100 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Spinner } from '@/components/ui/Spinner'
 import type { Driver } from '@/lib/types'
-import { Plus, Edit2, Trash2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-const emptyForm = { first_name: '', last_name: '', email: '', phone: '', is_active: true }
+const driverSchema = z.object({
+  first_name: z.string().min(1, 'Imię jest wymagane'),
+  last_name: z.string().min(1, 'Nazwisko jest wymagane'),
+  email: z.union([z.string().email('Nieprawidłowy email'), z.literal('')]).optional(),
+  phone: z.string().optional(),
+  is_active: z.boolean(),
+})
+type DriverForm = z.infer<typeof driverSchema>
+
+const emptyForm: DriverForm = { first_name: '', last_name: '', email: '', phone: '', is_active: true }
 
 export default function KierowcyPage() {
-  const [drivers, setDrivers] = useState<Driver[]>([])
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
   const [editDriver, setEditDriver] = useState<Driver | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [formData, setFormData] = useState(emptyForm)
-  const [formLoading, setFormLoading] = useState(false)
+  const [hardDeleteId, setHardDeleteId] = useState<string | null>(null)
 
-  const fetchDrivers = async () => {
-    setLoading(true)
-    try {
+  const { register, handleSubmit, formState: { errors }, reset } = useForm<DriverForm>({
+    resolver: zodResolver(driverSchema),
+    defaultValues: emptyForm,
+  })
+
+  const { data: drivers = [], isLoading } = useQuery<Driver[]>({
+    queryKey: ['drivers'],
+    queryFn: async () => {
       const res = await fetch('/api/drivers')
       const { data } = await res.json()
-      setDrivers(data ?? [])
-    } finally {
-      setLoading(false)
-    }
-  }
+      return data ?? []
+    },
+  })
 
-  useEffect(() => { fetchDrivers() }, [])
-
-  const openAdd = () => {
-    setEditDriver(null)
-    setFormData(emptyForm)
-    setShowForm(true)
-  }
-
-  const openEdit = (d: Driver) => {
-    setEditDriver(d)
-    setFormData({
-      first_name: d.first_name,
-      last_name: d.last_name,
-      email: d.email ?? '',
-      phone: d.phone ?? '',
-      is_active: d.is_active
-    })
-    setShowForm(true)
-  }
-
-  const handleSave = async () => {
-    if (!formData.first_name || !formData.last_name) {
-      toast.error('Imię i nazwisko są wymagane')
-      return
-    }
-    setFormLoading(true)
-    try {
-      const payload = {
-        ...formData,
-        email: formData.email || null,
-        phone: formData.phone || null
-      }
+  const saveMutation = useMutation({
+    mutationFn: async (form: DriverForm) => {
+      const payload = { ...form, email: form.email || null, phone: form.phone || null }
       const url = editDriver ? `/api/drivers/${editDriver.id}` : '/api/drivers'
       const method = editDriver ? 'PATCH' : 'POST'
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
       if (!res.ok) throw new Error((await res.json()).error)
+    },
+    onSuccess: () => {
       toast.success(editDriver ? 'Kierowca zaktualizowany' : 'Kierowca dodany')
       setShowForm(false)
-      fetchDrivers()
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : 'Błąd zapisu')
-    } finally {
-      setFormLoading(false)
-    }
-  }
+      queryClient.invalidateQueries({ queryKey: ['drivers'] })
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Błąd zapisu'),
+  })
 
-  const handleDelete = async () => {
-    if (!deleteId) return
-    try {
-      await fetch(`/api/drivers/${deleteId}`, { method: 'DELETE' })
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/drivers/${id}`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error() }),
+    onSuccess: () => {
       toast.success('Kierowca dezaktywowany')
       setDeleteId(null)
-      fetchDrivers()
-    } catch {
-      toast.error('Błąd')
-    }
+      queryClient.invalidateQueries({ queryKey: ['drivers'] })
+    },
+    onError: () => toast.error('Błąd'),
+  })
+
+  const hardDeleteMutation = useMutation({
+    mutationFn: (id: string) =>
+      fetch(`/api/drivers/${id}?force=true`, { method: 'DELETE' }).then((r) => { if (!r.ok) throw new Error() }),
+    onSuccess: () => {
+      toast.success('Kierowca usunięty')
+      setHardDeleteId(null)
+      queryClient.invalidateQueries({ queryKey: ['drivers'] })
+    },
+    onError: () => toast.error('Błąd usuwania kierowcy'),
+  })
+
+  const openAdd = () => {
+    setEditDriver(null)
+    reset(emptyForm)
+    setShowForm(true)
   }
 
+  const openEdit = (d: Driver) => {
+    setEditDriver(d)
+    reset({
+      first_name: d.first_name,
+      last_name: d.last_name,
+      email: d.email ?? '',
+      phone: d.phone ?? '',
+      is_active: d.is_active,
+    })
+    setShowForm(true)
+  }
   return (
     <div>
       <Header
@@ -119,7 +130,7 @@ export default function KierowcyPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {loading ? (
+              {isLoading ? (
                 <tr><td colSpan={5} className="text-center py-10"><Spinner /></td></tr>
               ) : drivers.length === 0 ? (
                 <tr><td colSpan={5} className="text-center py-10 text-gray-400">Brak kierowców</td></tr>
@@ -139,8 +150,11 @@ export default function KierowcyPage() {
                         <button onClick={() => openEdit(d)} className="p-1.5 rounded-lg text-gray-400 hover:text-primary-600 hover:bg-primary-50">
                           <Edit2 size={15} />
                         </button>
-                        <button onClick={() => setDeleteId(d.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50">
+                        <button onClick={() => setDeleteId(d.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50" title="Dezaktywuj">
                           <Trash2 size={15} />
+                        </button>
+                        <button onClick={() => setHardDeleteId(d.id)} className="p-1.5 rounded-lg text-gray-400 hover:text-red-700 hover:bg-red-100" title="Usuń trwale">
+                          <XCircle size={15} />
                         </button>
                       </div>
                     </td>
@@ -159,18 +173,18 @@ export default function KierowcyPage() {
         footer={
           <>
             <Button variant="outline" onClick={() => setShowForm(false)}>Anuluj</Button>
-            <Button onClick={handleSave} loading={formLoading}>Zapisz</Button>
+            <Button onClick={handleSubmit((data) => saveMutation.mutate(data))} loading={saveMutation.isPending}>Zapisz</Button>
           </>
         }
       >
         <div className="grid grid-cols-2 gap-4">
-          <Input label="Imię *" value={formData.first_name} onChange={e => setFormData(f => ({ ...f, first_name: e.target.value }))} />
-          <Input label="Nazwisko *" value={formData.last_name} onChange={e => setFormData(f => ({ ...f, last_name: e.target.value }))} />
-          <Input label="Email" type="email" value={formData.email} onChange={e => setFormData(f => ({ ...f, email: e.target.value }))} />
-          <Input label="Telefon" value={formData.phone} onChange={e => setFormData(f => ({ ...f, phone: e.target.value }))} />
+          <Input label="Imię *" {...register('first_name')} error={errors.first_name?.message} />
+          <Input label="Nazwisko *" {...register('last_name')} error={errors.last_name?.message} />
+          <Input label="Email" type="email" {...register('email')} error={errors.email?.message} />
+          <Input label="Telefon" {...register('phone')} error={errors.phone?.message} />
           <div className="col-span-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
-              <input type="checkbox" checked={formData.is_active} onChange={e => setFormData(f => ({ ...f, is_active: e.target.checked }))} className="rounded" />
+              <input type="checkbox" {...register('is_active')} className="rounded" />
               <span>Kierowca aktywny</span>
             </label>
           </div>
@@ -180,11 +194,19 @@ export default function KierowcyPage() {
       <ConfirmModal
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
+        onConfirm={() => deleteId && deleteMutation.mutate(deleteId)}
         title="Dezaktywuj kierowcę"
         message="Czy na pewno chcesz dezaktywować tego kierowcę?"
         confirmLabel="Dezaktywuj"
       />
-    </div>
+      <ConfirmModal
+        open={!!hardDeleteId}
+        onClose={() => setHardDeleteId(null)}
+        onConfirm={() => hardDeleteId && hardDeleteMutation.mutate(hardDeleteId)}
+        title="Usuń kierowcę trwale"
+        message="Uwaga! Kierowca zostanie trwale usunięty z bazy danych. Tej operacji nie można cofnąć."
+        confirmLabel="Usuń trwale"
+        variant="danger"
+      />    </div>
   )
 }
