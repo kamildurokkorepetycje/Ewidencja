@@ -472,7 +472,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
 
   return (
     <form onSubmit={handleSubmit(onSubmit as Parameters<typeof handleSubmit>[0])}>
-      <div className="flex flex-col xl:flex-row gap-6 xl:items-start">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
 
         {/* ─── LEFT: main form ─── */}
         <div className="w-full flex-1 min-w-0 space-y-5">
@@ -1038,7 +1038,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
         </div>
 
         {/* ─── RIGHT: sticky summary panel ─── */}
-        <div className="hidden xl:block xl:w-72 shrink-0 xl:sticky xl:top-4 space-y-4">
+        <div className="hidden lg:block lg:w-80 shrink-0 lg:sticky lg:top-4 space-y-4">
           <div className="surface overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-900">
               <h3 className="text-sm font-semibold text-white">Podsumowanie</h3>

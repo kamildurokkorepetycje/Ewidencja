@@ -39,7 +39,7 @@ export default async function DodajPrzejazdPage() {
   return (
     <div>
       <Header title="Dodaj przejazd" />
-      <div className="p-4 lg:p-6 max-w-5xl mx-auto">
+      <div className="p-4 lg:p-6 max-w-7xl mx-auto">
         <TripForm
           vehicles={vehicles ?? []}
           clients={clients ?? []}

@@ -34,7 +34,7 @@ export default async function EdytujPrzejazdPage({ params }: Props) {
   return (
     <div>
       <Header title="Edytuj przejazd" />
-      <div className="p-4 lg:p-6 max-w-3xl mx-auto">
+      <div className="p-4 lg:p-6 max-w-7xl mx-auto">
         <TripForm
           initialData={trip}
           vehicles={vehicles ?? []}
