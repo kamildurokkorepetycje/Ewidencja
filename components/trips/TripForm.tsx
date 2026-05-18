@@ -452,7 +452,8 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       if (!res.ok) { const { error } = await res.json(); throw new Error(error ?? 'Błąd zapisu') }
 
       toast.success(initialData ? 'Przejazd zaktualizowany' : 'Przejazd dodany')
-      router.push('/przejazdy?t=' + Date.now())
+      router.refresh()
+      router.push('/przejazdy')
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Błąd zapisu przejazdu')
     } finally {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { calculateDistance, calculateFuelUsed } from '@/lib/utils/calculations'
+import { cascadeRecalculateTrips } from '@/lib/utils/recalculate'
 
 export async function GET(
   _request: NextRequest,
@@ -74,6 +75,17 @@ export async function PATCH(
       invoice_number: data.invoice_number,
       user_id: user.id,
     })
+  }
+
+  // Kaskadowe przeliczenie kolejnych przejazdów tego samego pojazdu
+  if (data.vehicle_id) {
+    await cascadeRecalculateTrips(
+      supabase,
+      data.vehicle_id,
+      data.date_from,
+      data.odometer_end,
+      data.fuel_end
+    )
   }
 
   return NextResponse.json({ data })
