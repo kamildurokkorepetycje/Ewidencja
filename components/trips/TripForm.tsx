@@ -452,11 +452,10 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       if (!res.ok) { const { error } = await res.json(); throw new Error(error ?? 'Błąd zapisu') }
 
       toast.success(initialData ? 'Przejazd zaktualizowany' : 'Przejazd dodany')
-      router.refresh()
-      router.push('/przejazdy')
+      // loading pozostaje true – przycisk zablokowany podczas nawigacji
+      window.location.href = '/przejazdy'
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : 'Błąd zapisu przejazdu')
-    } finally {
       setLoading(false)
     }
   }
