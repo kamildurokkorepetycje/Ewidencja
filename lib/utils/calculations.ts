@@ -129,12 +129,13 @@ export function detectTripErrors(
     })
   }
 
-  // Paliwo końcowe poniżej zera
+  // Paliwo koncowe ponizej zera jest dopuszczalne do zapisu,
+  // ale wymaga uwagi uzytkownika.
   if (trip.fuel_end != null && trip.fuel_end < 0) {
     errors.push({
       field: 'fuel_end',
       message: 'Paliwo końcowe poniżej zera',
-      severity: 'error'
+      severity: 'warning'
     })
   }
 

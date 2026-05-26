@@ -9,6 +9,29 @@ export interface TripLeg {
   hotel_id?: string | null   // opcjonalnie powiązany hotel
 }
 
+export type AllowanceType = 'state' | 'company'
+
+export interface TripAllowance {
+  id: string
+  trip_id: string
+  user_id: string | null
+  day: string
+  allowance_type: AllowanceType
+  amount: number | null
+  currency: string
+  is_paid: boolean
+  paid_at: string | null
+  paid_by: string | null
+  payment_note: string | null
+  settlement_year: number | null
+  settlement_month: number | null
+  is_settled: boolean
+  settled_at: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface HotelLocation {
   id: string
   name: string
@@ -105,6 +128,7 @@ export interface Trip {
   driver?: Driver
   client?: Client
   errors?: TripError[]
+  trip_allowances?: TripAllowance[]
 }
 
 export interface TripError {

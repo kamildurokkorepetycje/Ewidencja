@@ -17,6 +17,7 @@ import {
   X,
   Plus,
   ChevronRight,
+  WalletCards,
 } from 'lucide-react'
 
 const navGroups = [
@@ -32,6 +33,7 @@ const navGroups = [
     items: [
       { href: '/klienci', label: 'Klienci', icon: Users },
       { href: '/paliwo', label: 'Paliwo i faktury', icon: Fuel },
+      { href: '/diety', label: 'Diety', icon: WalletCards },
       { href: '/hotele', label: 'Hotele', icon: Hotel },
     ]
   },

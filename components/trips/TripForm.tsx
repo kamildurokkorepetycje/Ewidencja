@@ -51,6 +51,15 @@ function formatDay(iso: string) {
 
 const HOME_CITY = 'Katowice'
 
+async function readErrorMessage(response: Response, fallback: string) {
+  const contentType = response.headers.get('content-type') ?? ''
+  if (contentType.includes('application/json')) {
+    const payload = await response.json().catch(() => null)
+    if (payload && typeof payload.error === 'string') return payload.error
+  }
+  return fallback
+}
+
 function buildDefaultLegs(
   dateFrom: string,
   dateTo: string,
@@ -72,6 +81,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(false)
+  const allowNavigationRef = useRef(false)
   const [liveErrors, setLiveErrors] = useState<ReturnType<typeof detectTripErrors>>([])
   const [fuelSurcharge, setFuelSurcharge] = useState<0 | 5 | 10>(0)
 
@@ -151,7 +161,6 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       null
     )
   })
-
   const {
     register,
     handleSubmit,
@@ -190,6 +199,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   useEffect(() => {
     if (!isDirty) return
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (allowNavigationRef.current) return
       event.preventDefault()
       event.returnValue = ''
     }
@@ -424,6 +434,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     : 'bg-emerald-500'
 
   async function onSubmit(formData: Record<string, unknown>) {
+    allowNavigationRef.current = true
     setLoading(true)
     try {
       const payload = {
@@ -449,12 +460,13 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       const url = initialData ? `/api/trips/${initialData.id}` : '/api/trips'
       const method = initialData ? 'PATCH' : 'POST'
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      if (!res.ok) { const { error } = await res.json(); throw new Error(error ?? 'Błąd zapisu') }
+      if (!res.ok) throw new Error(await readErrorMessage(res, 'Błąd zapisu'))
 
       toast.success(initialData ? 'Przejazd zaktualizowany' : 'Przejazd dodany')
       // loading pozostaje true – przycisk zablokowany podczas nawigacji
       window.location.href = '/przejazdy'
     } catch (e: unknown) {
+      allowNavigationRef.current = false
       toast.error(e instanceof Error ? e.message : 'Błąd zapisu przejazdu')
       setLoading(false)
     }

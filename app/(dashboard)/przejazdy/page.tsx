@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
@@ -23,7 +23,6 @@ type QuickFilter = 'all' | 'issues' | 'no_invoice' | 'hotel'
 type SortKey = 'date' | 'client' | 'km' | 'fuel'
 
 function PrzejazdyContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const refreshKey = searchParams.get('t')
   const [trips, setTrips] = useState<Trip[]>([])
@@ -39,22 +38,33 @@ function PrzejazdyContent() {
   const [search, setSearch] = useState('')
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all')
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'date', dir: 'desc' })
+  const [exportLoading, setExportLoading] = useState<'excel' | 'csv' | null>(null)
+
+  const buildTripParams = useCallback((targetPage: number, limit: number) => {
+    const params = new URLSearchParams()
+    params.set('page', String(targetPage))
+    params.set('limit', String(limit))
+    if (filters.date_from) params.set('date_from', filters.date_from)
+    if (filters.date_to) params.set('date_to', filters.date_to)
+    if (filters.trip_type) params.set('trip_type', filters.trip_type)
+    if (filters.client_id) params.set('client_id', filters.client_id)
+    if (filters.has_invoice != null) params.set('has_invoice', String(filters.has_invoice))
+    if (filters.has_hotel != null) params.set('has_hotel', String(filters.has_hotel))
+    if (filters.card_number) params.set('card_number', filters.card_number)
+    if (search) params.set('search', search)
+
+    if (quickFilter === 'issues') params.set('has_errors', 'true')
+    if (quickFilter === 'no_invoice') params.set('has_invoice', 'false')
+    if (quickFilter === 'hotel') params.set('has_hotel', 'true')
+
+    return params
+  }, [filters, search, quickFilter])
 
   const fetchTrips = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const params = new URLSearchParams()
-      params.set('page', String(page))
-      params.set('limit', String(PAGE_SIZE))
-      if (filters.date_from) params.set('date_from', filters.date_from)
-      if (filters.date_to) params.set('date_to', filters.date_to)
-      if (filters.trip_type) params.set('trip_type', filters.trip_type)
-      if (filters.client_id) params.set('client_id', filters.client_id)
-      if (filters.has_invoice != null) params.set('has_invoice', String(filters.has_invoice))
-      if (filters.has_hotel != null) params.set('has_hotel', String(filters.has_hotel))
-      if (filters.card_number) params.set('card_number', filters.card_number)
-      if (search) params.set('search', search)
+      const params = buildTripParams(page, PAGE_SIZE)
 
       const res = await fetch(`/api/trips?${params}`)
       if (!res.ok) throw new Error('Błąd pobierania przejazdów')
@@ -67,7 +77,7 @@ function PrzejazdyContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, filters, search, refreshKey])
+  }, [page, buildTripParams, refreshKey])
 
   useEffect(() => {
     fetchTrips()
@@ -76,7 +86,7 @@ function PrzejazdyContent() {
   // Reset to page 1 when filters or search change
   useEffect(() => {
     setPage(1)
-  }, [filters, search])
+  }, [filters, search, quickFilter])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -94,44 +104,62 @@ function PrzejazdyContent() {
     }
   }
 
-  const handleExportExcel = () => {
-    exportTripsToExcel(trips, 'przejazdy.xlsx')
-    toast.success('Plik Excel pobrany')
-  }
-
-  const handleExportCSV = () => {
-    const rows = trips.map((t) => ({
-      'Data od': t.date_from,
-      'Data do': t.date_to,
-      'Typ': t.trip_type,
-      'Klient': t.client?.name ?? '',
-      'Pojazd': t.vehicle?.registration_number ?? '',
-      'Km': t.distance_km ?? '',
-      'Paliwo': t.fuel_purchased ?? '',
-      'Faktura': t.invoice_number ?? '',
-      'Hotel': t.hotel ? 'Tak' : 'Nie'
-    }))
-    exportToCSV(rows, 'przejazdy.csv')
-    toast.success('Plik CSV pobrany')
-  }
-
-  const filtered = useMemo(() => {
-    const withQuickFilter = trips.filter((trip) => {
-      if (quickFilter === 'all') return true
-      if (quickFilter === 'issues') return detectTripErrors(trip, trip.vehicle).length > 0
-      if (quickFilter === 'no_invoice') return !trip.invoice_number
-      if (quickFilter === 'hotel') return Boolean(trip.hotel)
-      return true
-    })
-
-    return [...withQuickFilter].sort((a, b) => {
+  const sortTrips = useCallback((items: Trip[]) => {
+    return [...items].sort((a, b) => {
       const dir = sort.dir === 'asc' ? 1 : -1
       if (sort.key === 'date') return a.date_from.localeCompare(b.date_from) * dir
       if (sort.key === 'client') return (a.client?.name ?? '').localeCompare(b.client?.name ?? '', 'pl') * dir
       if (sort.key === 'km') return ((a.distance_km ?? 0) - (b.distance_km ?? 0)) * dir
       return ((a.fuel_used ?? a.fuel_purchased ?? 0) - (b.fuel_used ?? b.fuel_purchased ?? 0)) * dir
     })
-  }, [trips, quickFilter, sort])
+  }, [sort])
+
+  const fetchTripsForExport = async () => {
+    const params = buildTripParams(1, Math.max(totalCount, PAGE_SIZE, 10000))
+    const res = await fetch(`/api/trips?${params}`)
+    if (!res.ok) throw new Error('Nie mozna pobrac danych do eksportu')
+    const { data } = await res.json()
+    return sortTrips(data ?? [])
+  }
+
+  const handleExportExcel = async () => {
+    setExportLoading('excel')
+    try {
+      exportTripsToExcel(await fetchTripsForExport(), 'przejazdy.xlsx')
+      toast.success('Plik Excel pobrany')
+    } catch {
+      toast.error('Blad eksportu Excel')
+    } finally {
+      setExportLoading(null)
+    }
+  }
+
+  const handleExportCSV = async () => {
+    setExportLoading('csv')
+    try {
+      const rows = (await fetchTripsForExport()).map((t) => ({
+        'Data od': t.date_from,
+        'Data do': t.date_to,
+        'Typ': t.trip_type,
+        'Klient': t.client?.name ?? '',
+        'Pojazd': t.vehicle?.registration_number ?? '',
+        'Km': t.distance_km ?? '',
+        'Paliwo': t.fuel_purchased ?? '',
+        'Faktura': t.invoice_number ?? '',
+        'Hotel': t.hotel ? 'Tak' : 'Nie'
+      }))
+      exportToCSV(rows, 'przejazdy.csv')
+      toast.success('Plik CSV pobrany')
+    } catch {
+      toast.error('Blad eksportu CSV')
+    } finally {
+      setExportLoading(null)
+    }
+  }
+
+  const filtered = useMemo(() => {
+    return sortTrips(trips)
+  }, [trips, sortTrips])
 
   const quickFilters: { value: QuickFilter; label: string }[] = [
     { value: 'all', label: 'Wszystkie' },
@@ -176,6 +204,7 @@ function PrzejazdyContent() {
               variant="outline"
               size="sm"
               onClick={handleExportExcel}
+              loading={exportLoading === 'excel'}
             >
               <Download size={16} />
               Excel
@@ -505,7 +534,7 @@ function PrzejazdyContent() {
                 {totalCount} przejazdów · strona {page} z {totalPages}
               </p>
               <div className="flex gap-2">
-                <Button variant="ghost" size="sm" onClick={handleExportCSV}>
+                <Button variant="ghost" size="sm" onClick={handleExportCSV} loading={exportLoading === 'csv'}>
                   <Download size={14} />
                   CSV
                 </Button>
