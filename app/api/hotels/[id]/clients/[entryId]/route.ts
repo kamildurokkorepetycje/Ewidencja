@@ -17,6 +17,7 @@ export async function PATCH(
     .update({ distance_km: body.distance_km ?? null, updated_at: new Date().toISOString() })
     .eq('id', entryId)
     .eq('hotel_id', id)
+    .eq('user_id', user.id)
     .select('*, client:clients(id, name, code, city)')
     .single()
 
@@ -39,6 +40,7 @@ export async function DELETE(
     .delete()
     .eq('id', entryId)
     .eq('hotel_id', id)
+    .eq('user_id', user.id)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })

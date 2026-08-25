@@ -15,6 +15,7 @@ export async function GET(
     .from('hotel_client_distances')
     .select('*, client:clients(id, name, code, city)')
     .eq('hotel_id', id)
+    .eq('user_id', user.id)
     .order('created_at')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -34,7 +35,7 @@ export async function POST(
 
   const { data, error } = await supabase
     .from('hotel_client_distances')
-    .insert({ hotel_id: id, client_id: body.client_id, distance_km: body.distance_km ?? null })
+    .insert({ user_id: user.id, hotel_id: id, client_id: body.client_id, distance_km: body.distance_km ?? null })
     .select('*, client:clients(id, name, code, city)')
     .single()
 
