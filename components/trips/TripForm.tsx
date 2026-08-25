@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRouter } from 'next/navigation'
+import Decimal from 'decimal.js'
 import { Input } from '@/components/ui/Input'
 import { Select } from '@/components/ui/Select'
 import { Textarea } from '@/components/ui/Textarea'
@@ -11,15 +12,15 @@ import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { tripSchema } from '@/lib/utils/validation'
-import { estimateFuelUsed, detectTripErrors } from '@/lib/utils/calculations'
+import { detectTripErrors } from '@/lib/utils/calculations'
 import { todayAsInputValue } from '@/lib/utils/formatting'
 import { createClient } from '@/lib/supabase/client'
-import type { Vehicle, Client, Trip, TripLeg, HotelLocation } from '@/lib/types'
+import type { Vehicle, Client, Trip, TripLeg, HotelLocation, FuelPurchase } from '@/lib/types'
 import {
   Search, PlusCircle, Plus, Trash2, Hotel,
   Car, Droplets, FileText, MapPin,
   ArrowLeftRight, ArrowRight, CalendarDays, Gauge,
-  AlertCircle, CheckCircle2, ChevronRight, Fuel
+  AlertCircle, CheckCircle2, ChevronRight, Fuel, ReceiptText
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -30,6 +31,40 @@ interface TripFormProps {
   hotels?: HotelLocation[]
   lastOdometer?: number | null
   lastFuel?: number | null
+}
+
+interface FuelPurchaseDraft {
+  key: string
+  id?: string
+  expected_updated_at?: string
+  date: string
+  liters: string
+  amount_gross: string
+  invoice_number: string
+  notes: string
+}
+
+function purchaseToDraft(purchase: FuelPurchase): FuelPurchaseDraft {
+  return {
+    key: purchase.id,
+    id: purchase.id,
+    expected_updated_at: purchase.updated_at,
+    date: purchase.date,
+    liters: purchase.liters?.toString() ?? '',
+    amount_gross: purchase.amount_gross?.toString() ?? '',
+    invoice_number: purchase.invoice_number ?? '',
+    notes: purchase.notes ?? ''
+  }
+}
+
+function parseDecimal(value: string): Decimal | null {
+  const normalized = value.trim().replace(',', '.')
+  if (!normalized) return null
+  try {
+    return new Decimal(normalized)
+  } catch {
+    return null
+  }
 }
 
 // Generate date range array
@@ -86,6 +121,9 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   const [fuelSurcharge, setFuelSurcharge] = useState<0 | 5 | 10>(0)
   const [fuelAction, setFuelAction] = useState<'preserve_legacy' | 'switch_to_norm'>(
     initialData ? 'preserve_legacy' : 'switch_to_norm'
+  )
+  const [fuelPurchases, setFuelPurchases] = useState<FuelPurchaseDraft[]>(() =>
+    (initialData?.fuel_purchases ?? []).map(purchaseToDraft)
   )
 
   const defaultVehicle = vehicles.find((v) => v.is_active) ?? vehicles[0] ?? null
@@ -186,7 +224,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
         : lastOdometer != null ? String(lastOdometer) : '',
       local_km: initialData?.local_km != null ? String(initialData.local_km) : '',
       fuel_start: initialData?.fuel_start != null ? String(initialData.fuel_start) : lastFuel != null ? String(lastFuel) : '',
-      fuel_purchased: initialData?.fuel_purchases?.length ? '0' : initialData?.fuel_purchased != null ? String(initialData.fuel_purchased) : '0',
+      fuel_purchased: '0',
       fuel_end: initialData?.fuel_end != null ? String(initialData.fuel_end) : '',
       invoice_number: initialData?.invoice_number ?? '',
       hotel: initialData?.hotel ?? false,
@@ -262,21 +300,23 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   // odomStart = lastOdometer + localKm (auto-aktualizowany przez useEffect)
   const odomEnd = odomStart != null ? odomStart + totalLegsKm : null
 
-  const fuelStart = watchedValues.fuel_start ? parseFloat(watchedValues.fuel_start) : null
-  const additionalFuelPurchase = watchedValues.fuel_purchased ? parseFloat(watchedValues.fuel_purchased) : null
-  const existingFuelPurchases = initialData?.fuel_purchases ?? []
-  const existingFuelTotal = existingFuelPurchases.reduce((total, purchase) => total + (purchase.liters ?? 0), 0)
-  const fuelPurchased = existingFuelTotal + (additionalFuelPurchase ?? 0)
+  const fuelStartDecimal = parseDecimal(watchedValues.fuel_start ?? '')
+  const fuelStart = fuelStartDecimal?.toNumber() ?? null
+  const fuelPurchasedDecimal = fuelPurchases.reduce(
+    (total, purchase) => total.plus(parseDecimal(purchase.liters) ?? 0),
+    new Decimal(0)
+  )
+  const fuelPurchased = fuelPurchasedDecimal.toNumber()
   const selectedVehicle = vehicles.find((v) => v.id === watchedValues.vehicle_id) ?? defaultVehicle
   const activeVehicleObj = vehicles.find((v) => v.id === watchedValues.vehicle_id) ?? defaultVehicle
   const fuelNorm = activeVehicleObj?.fuel_norm ?? null
-  const baseFuelUsed = estimateFuelUsed(totalLegsKm || null, fuelNorm)  // norma × km / 100
-  const calcFuelUsed = baseFuelUsed != null
-    ? parseFloat((baseFuelUsed * (1 + fuelSurcharge / 100)).toFixed(2))
+  const exactFuelUsed = fuelNorm != null && totalLegsKm > 0
+    ? new Decimal(totalLegsKm).times(fuelNorm).div(100).times(new Decimal(100 + fuelSurcharge).div(100))
     : null
-  // paliwo końcowe = początkowe + zakup - zużyte
-  const calcFuelEnd = fuelStart != null && calcFuelUsed != null
-    ? fuelStart + (fuelPurchased ?? 0) - calcFuelUsed
+  const calcFuelUsed = exactFuelUsed?.toNumber() ?? null
+  // Zaokrąglenie występuje tylko raz: na końcowym stanie paliwa przekazywanym dalej.
+  const calcFuelEnd = fuelStartDecimal != null && exactFuelUsed != null
+    ? fuelStartDecimal.plus(fuelPurchasedDecimal).minus(exactFuelUsed).toDecimalPlaces(1, Decimal.ROUND_HALF_UP).toNumber()
     : null
 
   // Live errors
@@ -412,6 +452,30 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     }))
   }
 
+  function addFuelPurchase() {
+    setFuelPurchases((current) => [
+      ...current,
+      {
+        key: `new-${Date.now()}-${current.length}`,
+        date: watchDateFrom || todayAsInputValue(),
+        liters: '',
+        amount_gross: '',
+        invoice_number: '',
+        notes: ''
+      }
+    ])
+  }
+
+  function updateFuelPurchase(key: string, field: keyof Omit<FuelPurchaseDraft, 'key' | 'id' | 'expected_updated_at'>, value: string) {
+    setFuelPurchases((current) => current.map((purchase) => (
+      purchase.key === key ? { ...purchase, [field]: value } : purchase
+    )))
+  }
+
+  function removeFuelPurchase(key: string) {
+    setFuelPurchases((current) => current.filter((purchase) => purchase.key !== key))
+  }
+
   useEffect(() => {
     if (legHotelOpen === null) return
     function handleClose() { setLegHotelOpen(null) }
@@ -466,26 +530,17 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
           hotel_days: formData.hotel_days ? parseInt(String(formData.hotel_days), 10) : null,
           notes: formData.notes || null
         },
-        fuel_purchases: [
-          ...existingFuelPurchases.map((purchase) => ({
-            id: purchase.id,
-            expected_updated_at: purchase.updated_at,
+        fuel_purchases: fuelPurchases
+          .filter((purchase) => parseDecimal(purchase.liters)?.greaterThan(0))
+          .map((purchase) => ({
+            ...(purchase.id ? { id: purchase.id, expected_updated_at: purchase.expected_updated_at } : {}),
             vehicle_id: formData.vehicle_id,
             date: purchase.date,
             liters: purchase.liters,
-            amount_gross: purchase.amount_gross,
-            invoice_number: purchase.invoice_number,
-            notes: purchase.notes
-          })),
-          ...(additionalFuelPurchase && additionalFuelPurchase > 0 ? [{
-            vehicle_id: formData.vehicle_id,
-            date: String(formData.date_from),
-            liters: additionalFuelPurchase,
-            amount_gross: null,
-            invoice_number: formData.invoice_number || null,
-            notes: null
-          }] : [])
-        ]
+            amount_gross: purchase.amount_gross || null,
+            invoice_number: purchase.invoice_number || null,
+            notes: purchase.notes || null
+          }))
       }
 
       const url = initialData ? `/api/trips/${initialData.id}` : '/api/trips'
@@ -1003,24 +1058,94 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Paliwo początkowe (L)" type="number" step="0.01" placeholder="np. 45.0"
                   error={errors.fuel_start?.message} {...register('fuel_start')} />
-                <Input label={existingFuelPurchases.length ? 'Dodatkowy zakup paliwa (L)' : 'Zakup paliwa (L)'} type="number" step="0.01" placeholder="0"
-                  error={errors.fuel_purchased?.message} {...register('fuel_purchased')} />
               </div>
 
-              {existingFuelPurchases.length > 0 && (
-                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
-                  <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
-                    <p className="text-xs font-semibold text-slate-600">Zapisane tankowania</p>
-                    <p className="text-xs font-semibold text-amber-700">{existingFuelTotal.toFixed(2)} L</p>
-                  </div>
-                  {existingFuelPurchases.map((purchase) => (
-                    <div key={purchase.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                      <span className="text-slate-600">{purchase.date}{purchase.invoice_number ? ` · ${purchase.invoice_number}` : ''}</span>
-                      <span className="font-semibold text-slate-900 tabular-nums">{purchase.liters ?? 0} L</span>
+              <section className="overflow-hidden rounded-lg border border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-3 py-3 sm:px-4">
+                  <div className="flex items-center gap-2">
+                    <ReceiptText size={16} className="text-amber-600" />
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-800">Tankowania i faktury</h4>
+                      <p className="text-xs text-slate-500">Każda faktura jest zapisywana osobno.</p>
                     </div>
-                  ))}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold tabular-nums text-amber-700">{fuelPurchasedDecimal.toFixed(2)} L</span>
+                    <Button type="button" size="sm" variant="outline" onClick={addFuelPurchase}>
+                      <Plus size={14} /> Dodaj fakturę
+                    </Button>
+                  </div>
                 </div>
-              )}
+
+                {fuelPurchases.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={addFuelPurchase}
+                    className="flex w-full items-center justify-center gap-2 px-4 py-7 text-sm font-medium text-slate-500 transition hover:bg-amber-50 hover:text-amber-700"
+                  >
+                    <Plus size={16} /> Dodaj pierwsze tankowanie
+                  </button>
+                ) : (
+                  <div className="divide-y divide-slate-100">
+                    {fuelPurchases.map((purchase, index) => (
+                      <div key={purchase.key} className="relative p-3 sm:p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Faktura {index + 1}</p>
+                          <button
+                            type="button"
+                            onClick={() => removeFuelPurchase(purchase.key)}
+                            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                            title="Usuń tankowanie"
+                            aria-label={`Usuń tankowanie ${index + 1}`}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <Input
+                            label="Data"
+                            type="date"
+                            value={purchase.date}
+                            onChange={(event) => updateFuelPurchase(purchase.key, 'date', event.target.value)}
+                          />
+                          <Input
+                            label="Litry"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0,00"
+                            value={purchase.liters}
+                            onChange={(event) => updateFuelPurchase(purchase.key, 'liters', event.target.value)}
+                          />
+                          <Input
+                            label="Kwota brutto"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="PLN"
+                            value={purchase.amount_gross}
+                            onChange={(event) => updateFuelPurchase(purchase.key, 'amount_gross', event.target.value)}
+                          />
+                          <Input
+                            label="Numer faktury"
+                            placeholder="FV/2026/001"
+                            value={purchase.invoice_number}
+                            onChange={(event) => updateFuelPurchase(purchase.key, 'invoice_number', event.target.value)}
+                          />
+                        </div>
+                        <div className="mt-3">
+                          <Input
+                            label="Uwagi do faktury"
+                            placeholder="Opcjonalnie"
+                            value={purchase.notes}
+                            onChange={(event) => updateFuelPurchase(purchase.key, 'notes', event.target.value)}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
 
               {/* P5 / P10 surcharge */}
               <div className="flex items-center gap-4">
@@ -1070,7 +1195,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                     Zużyte paliwo (auto)
                   </label>
                   <div className="flex items-center h-[38px] px-3 py-2 rounded-lg bg-amber-50 border border-amber-100 text-sm font-bold text-amber-700 tabular-nums">
-                    {calcFuelUsed != null ? `${calcFuelUsed.toFixed(2)} L` : '–'}
+                    {calcFuelUsed != null ? `${exactFuelUsed?.toFixed(4)} L` : '–'}
                   </div>
                   {fuelNorm != null && (
                     <p className="text-xs text-slate-400">
@@ -1106,7 +1231,6 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                 </div>
               </div>
 
-              <Input label="Numer faktury" placeholder="np. FV/2025/001" {...register('invoice_number')} />
             </div>
           </div>
 
