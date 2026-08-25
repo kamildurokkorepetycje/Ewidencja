@@ -60,6 +60,9 @@ export async function POST(request: NextRequest) {
   if (!command.success) return NextResponse.json({ error: 'Niepoprawne dane przejazdu', details: command.error.flatten() }, { status: 400 })
 
   const { data, error } = await supabase.rpc('save_trip_with_children', { p_command: command.data })
-  if (error) return NextResponse.json({ error: 'Nie można zapisać przejazdu' }, { status: 400 })
+  if (error) {
+    console.error('Trip save RPC failed', error)
+    return NextResponse.json({ error: error.message || 'Nie można zapisać przejazdu' }, { status: 400 })
+  }
   return NextResponse.json({ data }, { status: 201 })
 }

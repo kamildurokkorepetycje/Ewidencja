@@ -33,7 +33,10 @@ export async function PATCH(
   if (!command.success) return NextResponse.json({ error: 'Niepoprawne dane przejazdu', details: command.error.flatten() }, { status: 400 })
 
   const { data, error } = await supabase.rpc('save_trip_with_children', { p_command: command.data })
-  if (error) return NextResponse.json({ error: 'Przejazd został zmieniony przez innego użytkownika lub nie istnieje' }, { status: 409 })
+  if (error) {
+    console.error('Trip update RPC failed', error)
+    return NextResponse.json({ error: error.message || 'Przejazd został zmieniony przez innego użytkownika lub nie istnieje' }, { status: 409 })
+  }
   return NextResponse.json({ data })
 }
 

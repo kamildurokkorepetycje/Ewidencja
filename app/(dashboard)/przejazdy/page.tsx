@@ -15,7 +15,7 @@ import { formatDate } from '@/lib/utils/formatting'
 import { detectTripErrors } from '@/lib/utils/calculations'
 import { exportTripsToExcel, exportToCSV } from '@/lib/utils/excel'
 import type { Trip, TripFilters } from '@/lib/types'
-import { Plus, Filter, Download, Edit2, Trash2, AlertTriangle, CheckCircle, MapPin, Fuel, ArrowUpDown } from 'lucide-react'
+import { Plus, Filter, Download, Edit2, Trash2, AlertTriangle, CheckCircle, MapPin, Fuel, ArrowUpDown, Eye } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const PAGE_SIZE = 30
@@ -370,8 +370,13 @@ function PrzejazdyContent() {
                     </div>
                   </div>
                   <div className="mt-3 flex justify-end gap-1">
+                    <Link href={`/przejazdy/${trip.id}`}>
+                      <button title="Podgląd" className="p-2 rounded-lg text-slate-500 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                        <Eye size={15} />
+                      </button>
+                    </Link>
                     <Link href={`/przejazdy/${trip.id}/edytuj`}>
-                      <button className="p-2 rounded-lg text-slate-500 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                      <button title="Edytuj" className="p-2 rounded-lg text-slate-500 hover:text-primary-600 hover:bg-primary-50 transition-colors">
                         <Edit2 size={15} />
                       </button>
                     </Link>
@@ -518,8 +523,13 @@ function PrzejazdyContent() {
                         {/* Akcje */}
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-0.5 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                            <Link href={`/przejazdy/${trip.id}`}>
+                              <button title="Podgląd" className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                                <Eye size={14} />
+                              </button>
+                            </Link>
                             <Link href={`/przejazdy/${trip.id}/edytuj`}>
-                              <button className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                              <button title="Edytuj" className="p-1.5 rounded-lg text-slate-400 hover:text-primary-600 hover:bg-primary-50 transition-colors">
                                 <Edit2 size={14} />
                               </button>
                             </Link>

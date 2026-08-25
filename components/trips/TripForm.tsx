@@ -90,6 +90,11 @@ async function readErrorMessage(response: Response, fallback: string) {
   const contentType = response.headers.get('content-type') ?? ''
   if (contentType.includes('application/json')) {
     const payload = await response.json().catch(() => null)
+    if (payload?.details?.fieldErrors && typeof payload.details.fieldErrors === 'object') {
+      const fields = Object.entries(payload.details.fieldErrors as Record<string, unknown>)
+        .flatMap(([field, messages]) => Array.isArray(messages) ? messages.map((message) => `${field}: ${message}`) : [])
+      if (fields.length > 0) return `${fallback}: ${fields.join(', ')}`
+    }
     if (payload && typeof payload.error === 'string') return payload.error
   }
   return fallback

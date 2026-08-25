@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 const uuidSchema = z.string().uuid()
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const timestampSchema = z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Niepoprawny znacznik czasu')
 const nullableString = z.preprocess((value) => value === '' || value == null ? null : value, z.string().nullable())
 const nullableNumber = z.preprocess((value) => {
   if (value === '' || value == null) return null
@@ -19,7 +20,7 @@ const tripLegSchema = z.object({
 
 const fuelPurchaseSchema = z.object({
   id: uuidSchema.optional(),
-  expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  expected_updated_at: timestampSchema.optional(),
   vehicle_id: uuidSchema,
   date: dateSchema,
   liters: nullableNumber,
@@ -30,7 +31,7 @@ const fuelPurchaseSchema = z.object({
 
 export const saveTripCommandSchema = z.object({
   trip_id: uuidSchema.optional(),
-  expected_updated_at: z.string().datetime({ offset: true }).optional(),
+  expected_updated_at: timestampSchema.optional(),
   fuel_action: z.enum(['preserve_legacy', 'switch_to_norm', 'recalculate_norm']),
   trip: z.object({
     date_from: dateSchema,

@@ -116,6 +116,10 @@ export interface Trip {
   fuel_purchased: number | null
   fuel_end: number | null
   fuel_used: number | null
+  fuel_used_exact?: number | null
+  fuel_norm_used?: number | null
+  fuel_adjustment_percent?: 0 | 5 | 10 | null
+  fuel_calculation_mode?: 'legacy' | 'norm' | null
   invoice_number: string | null
   hotel: boolean
   hotel_days: number | null
