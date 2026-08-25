@@ -18,7 +18,7 @@ export async function PATCH(
     .eq('id', entryId)
     .eq('hotel_id', id)
     .eq('user_id', user.id)
-    .select('*, client:clients(id, name, code, city)')
+    .select('*, client:clients!hotel_distance_owner_client_fk(id, name, code, city)')
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
