@@ -58,13 +58,13 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase
       .from('trips')
-      .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*)')
+      .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*), fuel_purchases!fuel_purchases_trip_id_fkey(liters)')
       .gte('date_from', monthStart)
       .lte('date_from', monthEnd)
       .order('date_from', { ascending: false }),
     supabase
       .from('trips')
-      .select('distance_km, fuel_purchased, trip_type, local_km, invoice_number')
+      .select('distance_km, fuel_purchased, trip_type, local_km, invoice_number, fuel_purchases!fuel_purchases_trip_id_fkey(liters)')
       .gte('date_from', prevStart)
       .lte('date_from', prevEnd),
     supabase

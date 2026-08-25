@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('trips')
-    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*)')
+    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*), fuel_purchases!fuel_purchases_trip_id_fkey(liters,amount_gross,invoice_number,date)')
     .gte('date_from', `${year}-01-01`)
     .lte('date_from', `${year}-12-31`)
     .order('date_from')
@@ -38,7 +38,10 @@ export async function GET(request: NextRequest) {
     .filter((t) => t.trip_type === 'prywatny')
     .reduce((s, t) => s + (t.distance_km ?? 0), 0)
   const localKm = (trips ?? []).reduce((s, t) => s + (t.local_km ?? 0), 0)
-  const totalFuel = (trips ?? []).reduce((s, t) => s + (t.fuel_purchased ?? 0), 0)
+  const tripFuelTotal = (trip: { fuel_purchases?: Array<{ liters: number | null }> | null; fuel_purchased?: number | null }) => (
+    trip.fuel_purchases?.reduce((sum, purchase) => sum + (purchase.liters ?? 0), 0) ?? trip.fuel_purchased ?? 0
+  )
+  const totalFuel = (trips ?? []).reduce((sum, trip) => sum + tripFuelTotal(trip), 0)
   const totalFuelUsed = (trips ?? []).reduce((s, t) => s + (t.fuel_used ?? 0), 0)
   const avgConsumption = totalKm > 0 ? (totalFuelUsed / totalKm) * 100 : null
   const invoiceCount = (trips ?? []).filter((t) => t.invoice_number).length
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
     return {
       month: m,
       km: monthTrips.reduce((s, t) => s + (t.distance_km ?? 0), 0),
-      fuel: monthTrips.reduce((s, t) => s + (t.fuel_purchased ?? 0), 0),
+      fuel: monthTrips.reduce((sum, trip) => sum + tripFuelTotal(trip), 0),
       trips: monthTrips.length
     }
   })

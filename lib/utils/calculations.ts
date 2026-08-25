@@ -190,7 +190,10 @@ export function calculateMonthlyStats(trips: Trip[]) {
     .filter((t) => t.trip_type === 'prywatny')
     .reduce((sum, t) => sum + (t.distance_km ?? 0), 0)
   const localKm = trips.reduce((sum, t) => sum + (t.local_km ?? 0), 0)
-  const totalFuel = trips.reduce((sum, t) => sum + (t.fuel_purchased ?? 0), 0)
+  const totalFuel = trips.reduce(
+    (sum, trip) => sum + (trip.fuel_purchases?.reduce((purchases, purchase) => purchases + (purchase.liters ?? 0), 0) ?? trip.fuel_purchased ?? 0),
+    0
+  )
   const totalFuelUsed = trips.reduce((sum, t) => sum + (t.fuel_used ?? 0), 0)
   const avgConsumption =
     totalKm > 0 ? calculateAvgConsumption(totalFuelUsed, totalKm) : null

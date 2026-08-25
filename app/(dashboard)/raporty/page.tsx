@@ -173,7 +173,7 @@ export default function RaportyPage() {
                 color="green"
               />
               <StatCard
-                title="Zużyte paliwo"
+                title="Zatankowane paliwo"
                 value={formatLiters(report.total_fuel)}
                 icon={<Fuel size={20} />}
                 color="yellow"

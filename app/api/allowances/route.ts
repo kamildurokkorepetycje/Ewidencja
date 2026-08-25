@@ -68,19 +68,28 @@ export async function PATCH(request: NextRequest) {
 
   const updates = await Promise.all(
     parsed.data.allowances.map(async (item) => {
+      const update: Record<string, unknown> = {
+        amount: item.amount,
+        updated_at: new Date().toISOString()
+      }
+
+      if (item.is_paid !== undefined) {
+        update.is_paid = item.is_paid
+        update.paid_at = item.is_paid ? (item.paid_at ?? new Date().toISOString()) : null
+        update.paid_by = item.is_paid ? user.id : null
+        update.payment_note = item.payment_note ?? null
+      }
+
+      if (item.is_settled !== undefined) {
+        update.is_settled = item.is_settled
+        update.settled_at = item.is_settled ? (item.settled_at ?? new Date().toISOString()) : null
+      }
+
+      if (item.notes !== undefined) update.notes = item.notes
+
       const { data, error } = await supabase
         .from('trip_allowances')
-        .update({
-          amount: item.amount,
-          is_paid: item.is_paid ?? false,
-          paid_at: item.is_paid ? (item.paid_at ?? new Date().toISOString()) : null,
-          paid_by: item.is_paid ? user.id : null,
-          payment_note: item.payment_note ?? null,
-          is_settled: item.is_settled ?? false,
-          settled_at: item.is_settled ? (item.settled_at ?? new Date().toISOString()) : null,
-          notes: item.notes ?? null,
-          updated_at: new Date().toISOString()
-        })
+        .update(update)
         .eq('id', item.id)
         .select()
         .single()
