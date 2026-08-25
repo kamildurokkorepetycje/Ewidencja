@@ -11,7 +11,7 @@ interface HeaderProps {
 
 export function Header({ title, onMenuClick, actions }: HeaderProps) {
   const sidebar = useSidebar()
-  const handleMenuClick = onMenuClick ?? sidebar.open
+  const handleMenuClick = onMenuClick ?? sidebar.toggle
 
   return (
     <header className="bg-white/95 backdrop-blur border-b border-slate-200 px-4 lg:px-6 py-3 flex items-center gap-4 sticky top-0 z-30">
@@ -24,7 +24,7 @@ export function Header({ title, onMenuClick, actions }: HeaderProps) {
         <Menu size={20} />
       </button>
 
-      <h1 className="text-lg font-semibold text-slate-950 flex-1 tracking-tight">{title}</h1>
+      <h1 className="min-w-0 flex-1 truncate text-lg font-semibold text-slate-950 tracking-tight">{title}</h1>
 
       <div className="flex items-center gap-2">
         {actions}

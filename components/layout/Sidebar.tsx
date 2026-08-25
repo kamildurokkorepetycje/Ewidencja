@@ -52,6 +52,8 @@ function getInitials(name: string | null): string {
 
 const roleLabels: Record<string, string> = {
   admin: 'Administrator',
+  manager: 'Menedżer',
+  driver: 'Kierowca',
   kierowca: 'Kierowca',
   podgląd: 'Podgląd',
 }
@@ -80,9 +82,9 @@ export function Sidebar({ onClose, mobile }: SidebarProps) {
       if (!user) return
       setUserEmail(user.email ?? null)
       const { data: profile } = await supabase
-        .from('user_profiles')
+        .from('profiles')
         .select('full_name, role')
-        .eq('user_id', user.id)
+        .eq('id', user.id)
         .single()
       if (profile) {
         setUserName(profile.full_name)

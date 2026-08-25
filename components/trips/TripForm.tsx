@@ -84,6 +84,9 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   const allowNavigationRef = useRef(false)
   const [liveErrors, setLiveErrors] = useState<ReturnType<typeof detectTripErrors>>([])
   const [fuelSurcharge, setFuelSurcharge] = useState<0 | 5 | 10>(0)
+  const [fuelAction, setFuelAction] = useState<'preserve_legacy' | 'switch_to_norm'>(
+    initialData ? 'preserve_legacy' : 'switch_to_norm'
+  )
 
   const defaultVehicle = vehicles.find((v) => v.is_active) ?? vehicles[0] ?? null
 
@@ -183,7 +186,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
         : lastOdometer != null ? String(lastOdometer) : '',
       local_km: initialData?.local_km != null ? String(initialData.local_km) : '',
       fuel_start: initialData?.fuel_start != null ? String(initialData.fuel_start) : lastFuel != null ? String(lastFuel) : '',
-      fuel_purchased: initialData?.fuel_purchased != null ? String(initialData.fuel_purchased) : '0',
+      fuel_purchased: initialData?.fuel_purchases?.length ? '0' : initialData?.fuel_purchased != null ? String(initialData.fuel_purchased) : '0',
       fuel_end: initialData?.fuel_end != null ? String(initialData.fuel_end) : '',
       invoice_number: initialData?.invoice_number ?? '',
       hotel: initialData?.hotel ?? false,
@@ -260,8 +263,11 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
   const odomEnd = odomStart != null ? odomStart + totalLegsKm : null
 
   const fuelStart = watchedValues.fuel_start ? parseFloat(watchedValues.fuel_start) : null
-  const fuelPurchased = watchedValues.fuel_purchased ? parseFloat(watchedValues.fuel_purchased) : null
-  // norma spalania z ustawień pojazdu (stała)
+  const additionalFuelPurchase = watchedValues.fuel_purchased ? parseFloat(watchedValues.fuel_purchased) : null
+  const existingFuelPurchases = initialData?.fuel_purchases ?? []
+  const existingFuelTotal = existingFuelPurchases.reduce((total, purchase) => total + (purchase.liters ?? 0), 0)
+  const fuelPurchased = existingFuelTotal + (additionalFuelPurchase ?? 0)
+  const selectedVehicle = vehicles.find((v) => v.id === watchedValues.vehicle_id) ?? defaultVehicle
   const activeVehicleObj = vehicles.find((v) => v.id === watchedValues.vehicle_id) ?? defaultVehicle
   const fuelNorm = activeVehicleObj?.fuel_norm ?? null
   const baseFuelUsed = estimateFuelUsed(totalLegsKm || null, fuelNorm)  // norma × km / 100
@@ -438,23 +444,48 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     setLoading(true)
     try {
       const payload = {
-        ...formData,
-        odometer_start: odomStart,
-        odometer_end: odomEnd,
-        distance_km: totalLegsKm || null,
-        local_km: localKm,
-        trip_legs: legs,
-        fuel_start: fuelStart,
-        fuel_purchased: fuelPurchased,
-        fuel_end: calcFuelEnd,
-        fuel_used: calcFuelUsed,
-        avg_consumption: fuelNorm,
-        hotel_days: formData.hotel_days ? parseInt(String(formData.hotel_days), 10) : null,
-        client_id: formData.client_id || null,
-        driver_id: null,
-        card_number: formData.card_number || null,
-        invoice_number: formData.invoice_number || null,
-        notes: formData.notes || null
+        ...(initialData ? { trip_id: initialData.id, expected_updated_at: initialData.updated_at } : {}),
+        fuel_action: fuelAction,
+        trip: {
+          date_from: String(formData.date_from),
+          date_to: String(formData.date_to),
+          trip_type: formData.trip_type,
+          vehicle_id: formData.vehicle_id,
+          client_id: formData.client_id || null,
+          driver_id: null,
+          card_number: formData.card_number || null,
+          odometer_start: odomStart,
+          odometer_end: odomEnd,
+          distance_km: totalLegsKm || null,
+          local_km: localKm,
+          trip_legs: legs,
+          fuel_start: fuelStart,
+          fuel_adjustment_percent: fuelSurcharge,
+          invoice_number: formData.invoice_number || null,
+          hotel: Boolean(formData.hotel),
+          hotel_days: formData.hotel_days ? parseInt(String(formData.hotel_days), 10) : null,
+          notes: formData.notes || null
+        },
+        fuel_purchases: [
+          ...existingFuelPurchases.map((purchase) => ({
+            id: purchase.id,
+            expected_updated_at: purchase.updated_at,
+            vehicle_id: formData.vehicle_id,
+            date: purchase.date,
+            liters: purchase.liters,
+            amount_gross: purchase.amount_gross,
+            invoice_number: purchase.invoice_number,
+            notes: purchase.notes
+          })),
+          ...(additionalFuelPurchase && additionalFuelPurchase > 0 ? [{
+            vehicle_id: formData.vehicle_id,
+            date: String(formData.date_from),
+            liters: additionalFuelPurchase,
+            amount_gross: null,
+            invoice_number: formData.invoice_number || null,
+            notes: null
+          }] : [])
+        ]
       }
 
       const url = initialData ? `/api/trips/${initialData.id}` : '/api/trips'
@@ -463,8 +494,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       if (!res.ok) throw new Error(await readErrorMessage(res, 'Błąd zapisu'))
 
       toast.success(initialData ? 'Przejazd zaktualizowany' : 'Przejazd dodany')
-      // loading pozostaje true – przycisk zablokowany podczas nawigacji
-      window.location.href = '/przejazdy'
+      router.push('/przejazdy')
     } catch (e: unknown) {
       allowNavigationRef.current = false
       toast.error(e instanceof Error ? e.message : 'Błąd zapisu przejazdu')
@@ -519,14 +549,14 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
               </div>
             </div>
             <div className="p-4 sm:p-5 space-y-4">
-              {defaultVehicle && (
+              {selectedVehicle && (
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-primary-50 border border-primary-100">
                   <Car size={16} className="text-primary-500 shrink-0" />
                   <div>
                     <p className="text-xs text-primary-500 font-medium">Pojazd</p>
                     <p className="text-sm font-semibold text-primary-800">
-                      {defaultVehicle.brand} {defaultVehicle.model}
-                      <span className="ml-2 font-normal text-primary-600">({defaultVehicle.registration_number})</span>
+                      {selectedVehicle.brand} {selectedVehicle.model}
+                      <span className="ml-2 font-normal text-primary-600">({selectedVehicle.registration_number})</span>
                     </p>
                   </div>
                 </div>
@@ -564,6 +594,23 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                       label="Typ przejazdu"
                       error={errors.trip_type?.message}
                       options={[{ value: 'służbowy', label: 'Służbowy' }, { value: 'prywatny', label: 'Prywatny' }]}
+                      {...field}
+                    />
+                  )}
+                />
+                <Controller
+                  name="vehicle_id"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      label="Pojazd"
+                      error={errors.vehicle_id?.message}
+                      options={vehicles
+                        .filter((vehicle) => vehicle.is_active || vehicle.id === initialData?.vehicle_id)
+                        .map((vehicle) => ({
+                          value: vehicle.id,
+                          label: `${vehicle.registration_number} - ${vehicle.brand} ${vehicle.model}`
+                        }))}
                       {...field}
                     />
                   )}
@@ -956,9 +1003,24 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input label="Paliwo początkowe (L)" type="number" step="0.01" placeholder="np. 45.0"
                   error={errors.fuel_start?.message} {...register('fuel_start')} />
-                <Input label="Zakup paliwa (L)" type="number" step="0.01" placeholder="0"
+                <Input label={existingFuelPurchases.length ? 'Dodatkowy zakup paliwa (L)' : 'Zakup paliwa (L)'} type="number" step="0.01" placeholder="0"
                   error={errors.fuel_purchased?.message} {...register('fuel_purchased')} />
               </div>
+
+              {existingFuelPurchases.length > 0 && (
+                <div className="rounded-lg border border-slate-200 divide-y divide-slate-100">
+                  <div className="flex items-center justify-between px-3 py-2 bg-slate-50">
+                    <p className="text-xs font-semibold text-slate-600">Zapisane tankowania</p>
+                    <p className="text-xs font-semibold text-amber-700">{existingFuelTotal.toFixed(2)} L</p>
+                  </div>
+                  {existingFuelPurchases.map((purchase) => (
+                    <div key={purchase.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                      <span className="text-slate-600">{purchase.date}{purchase.invoice_number ? ` · ${purchase.invoice_number}` : ''}</span>
+                      <span className="font-semibold text-slate-900 tabular-nums">{purchase.liters ?? 0} L</span>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* P5 / P10 surcharge */}
               <div className="flex items-center gap-4">
@@ -977,6 +1039,28 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
                   </label>
                 ))}
               </div>
+
+              {initialData && (
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <p className="w-full text-xs font-medium text-slate-600">Sposób obliczania paliwa</p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={fuelAction === 'preserve_legacy' ? 'outline' : 'ghost'}
+                    onClick={() => setFuelAction('preserve_legacy')}
+                  >
+                    Zachowaj historyczne wyliczenie
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={fuelAction === 'switch_to_norm' ? 'outline' : 'ghost'}
+                    onClick={() => setFuelAction('switch_to_norm')}
+                  >
+                    Przelicz według normy
+                  </Button>
+                </div>
+              )}
 
               {/* Fuel computed row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1040,8 +1124,34 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
             </div>
           </div>
 
-          {/* Submit */}
-          <div className="flex gap-3 pb-6">
+          <div className="lg:hidden surface p-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="muted-label">Dystans</p>
+                <p className="mt-1 text-xl font-bold text-indigo-700 tabular-nums">
+                  {totalLegsKm > 0 ? `${totalLegsKm} km` : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="muted-label">Paliwo końcowe</p>
+                <p className={`mt-1 text-xl font-bold tabular-nums ${
+                  calcFuelEnd == null ? 'text-slate-400'
+                  : fuelBarPct != null && fuelBarPct < 15 ? 'text-red-600'
+                  : fuelBarPct != null && fuelBarPct < 30 ? 'text-amber-600'
+                  : 'text-emerald-600'
+                }`}>
+                  {calcFuelEnd != null ? `${calcFuelEnd.toFixed(1)} L` : '—'}
+                </p>
+              </div>
+            </div>
+            {(errCount > 0 || warnCount > 0) && (
+              <p className={`text-xs font-medium ${errCount > 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                {errCount > 0 ? `${errCount} błędów wymaga poprawy` : `${warnCount} ostrzeżeń do sprawdzenia`}
+              </p>
+            )}
+          </div>
+
+          <div className="flex gap-3 pb-6 lg:hidden">
             <Button type="button" variant="outline" onClick={() => router.back()} className="flex-1 sm:flex-none justify-center">Anuluj</Button>
             <Button type="submit" loading={loading} className="flex-1 justify-center">
               {initialData ? 'Zapisz zmiany' : 'Dodaj przejazd'}

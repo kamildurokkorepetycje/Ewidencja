@@ -31,9 +31,20 @@ export async function middleware(request: NextRequest) {
   )
 
   // Refresh session
-  const {
-    data: { user }
-  } = await supabase.auth.getUser()
+  let user = null
+  try {
+    const { data } = await supabase.auth.getUser()
+    user = data.user
+  } catch {
+    // Network error or Supabase unreachable — fail open to login redirect
+    const { pathname } = request.nextUrl
+    if (!pathname.startsWith('/login') && !pathname.startsWith('/auth')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/login'
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
 
   const { pathname } = request.nextUrl
 

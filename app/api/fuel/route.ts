@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { fuelPurchaseCommandSchema } from '@/lib/schemas/fuel-purchase-command'
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
@@ -27,8 +28,10 @@ export async function POST(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await request.json()
-  const { data, error } = await supabase.from('fuel_purchases').insert({ ...body, user_id: user.id }).select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const parsed = fuelPurchaseCommandSchema.safeParse(await request.json())
+  if (!parsed.success) return NextResponse.json({ error: 'Niepoprawne dane tankowania', details: parsed.error.flatten() }, { status: 400 })
+
+  const { data, error } = await supabase.rpc('save_fuel_purchase', { p_command: parsed.data })
+  if (error) return NextResponse.json({ error: 'Nie można zapisać tankowania' }, { status: 400 })
   return NextResponse.json({ data }, { status: 201 })
 }

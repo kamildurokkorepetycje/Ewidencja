@@ -11,7 +11,7 @@ import { formatKm, formatLiters, formatConsumption, formatDate, getMonthName } f
 import { exportTripsToExcel, exportToCSV } from '@/lib/utils/excel'
 import { generateMonthlyReportPDF } from '@/lib/utils/export'
 import type { MonthlyReport } from '@/lib/types'
-import { FileDown, FileSpreadsheet, FileText, BarChart3, Route, Fuel, AlertTriangle } from 'lucide-react'
+import { FileDown, FileSpreadsheet, FileText, BarChart3, Route, Fuel } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => ({

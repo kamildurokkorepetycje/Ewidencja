@@ -1,5 +1,5 @@
 export type TripType = 'służbowy' | 'prywatny'
-export type UserRole = 'admin' | 'kierowca' | 'podgląd'
+export type UserRole = 'admin' | 'manager' | 'driver' | 'kierowca' | 'podgląd'
 
 export interface TripLeg {
   day: string       // ISO date e.g. '2026-05-11'
@@ -129,6 +129,7 @@ export interface Trip {
   client?: Client
   errors?: TripError[]
   trip_allowances?: TripAllowance[]
+  fuel_purchases?: FuelPurchase[]
 }
 
 export interface TripError {
@@ -147,6 +148,7 @@ export interface FuelPurchase {
   invoice_number: string | null
   notes: string | null
   created_at: string
+  updated_at: string
   // Joined fields
   vehicle?: Vehicle
   trip?: Trip

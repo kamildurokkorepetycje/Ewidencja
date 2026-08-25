@@ -4,7 +4,7 @@ import { Header } from '@/components/layout/Header'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate, formatKm } from '@/lib/utils/formatting'
 import Link from 'next/link'
-import { MapPin, Route, Calendar, FileText, Hotel } from 'lucide-react'
+import { MapPin, Route } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,7 +30,6 @@ export default async function KlientDetailPage({ params }: Props) {
   const totalKm = (trips ?? []).reduce((s, t) => s + (t.distance_km ?? 0), 0)
   const withHotel = (trips ?? []).filter((t) => t.hotel).length
   const withInvoice = (trips ?? []).filter((t) => t.invoice_number).length
-  const lastTrip = trips?.[0]
 
   return (
     <div>

@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/Textarea'
 import { Spinner } from '@/components/ui/Spinner'
 import { Alert } from '@/components/ui/Alert'
 import { StatCard } from '@/components/ui/Card'
-import { formatDate, formatLiters, formatCurrency, todayAsInputValue } from '@/lib/utils/formatting'
+import { formatDate, formatCurrency, todayAsInputValue } from '@/lib/utils/formatting'
 import type { FuelPurchase, Vehicle } from '@/lib/types'
 import { Plus, Edit2, Trash2, Fuel, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -82,6 +82,7 @@ export default function PaliwoPage() {
     try {
       const payload = {
         ...formData,
+        ...(editItem ? { expected_updated_at: editItem.updated_at } : {}),
         liters: parseFloat(formData.liters),
         amount_gross: formData.amount_gross ? parseFloat(formData.amount_gross) : null,
         trip_id: formData.trip_id || null,
@@ -109,7 +110,13 @@ export default function PaliwoPage() {
   const handleDelete = async () => {
     if (!deleteId) return
     try {
-      await fetch(`/api/fuel/${deleteId}`, { method: 'DELETE' })
+      const item = fuels.find((fuel) => fuel.id === deleteId)
+      const response = await fetch(`/api/fuel/${deleteId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_updated_at: item?.updated_at })
+      })
+      if (!response.ok) throw new Error('Nie można usunąć faktury')
       toast.success('Faktura usunięta')
       setDeleteId(null)
       fetchData()
@@ -174,7 +181,7 @@ export default function PaliwoPage() {
                     <td className="px-4 py-3 font-medium">{formatDate(f.date)}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs font-mono">{f.invoice_number ?? <span className="text-red-400 flex items-center gap-1"><AlertTriangle size={12} /> Brak</span>}</td>
                     <td className="px-4 py-3 text-sm font-medium text-gray-700">
-                      {(f.trip as any)?.card_number ?? <span className="text-gray-300">—</span>}
+                      {(f.trip as { card_number?: string | null } | undefined)?.card_number ?? <span className="text-gray-300">—</span>}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold">{f.liters != null ? `${f.liters} L` : '-'}</td>
                     <td className="px-4 py-3">

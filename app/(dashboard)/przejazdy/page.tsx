@@ -11,7 +11,7 @@ import { ConfirmModal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { Alert } from '@/components/ui/Alert'
 import { DatePicker } from '@/components/ui/DatePicker'
-import { formatDate, formatKm, formatLiters } from '@/lib/utils/formatting'
+import { formatDate } from '@/lib/utils/formatting'
 import { detectTripErrors } from '@/lib/utils/calculations'
 import { exportTripsToExcel, exportToCSV } from '@/lib/utils/excel'
 import type { Trip, TripFilters } from '@/lib/types'
@@ -92,7 +92,12 @@ function PrzejazdyContent() {
     if (!deleteId) return
     setDeleteLoading(true)
     try {
-      const res = await fetch(`/api/trips/${deleteId}`, { method: 'DELETE' })
+      const trip = trips.find((item) => item.id === deleteId)
+      const res = await fetch(`/api/trips/${deleteId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_updated_at: trip?.updated_at })
+      })
       if (!res.ok) throw new Error('Nie można usunąć przejazdu')
       toast.success('Przejazd usunięty')
       setDeleteId(null)

@@ -7,7 +7,7 @@ import { Select } from '@/components/ui/Select'
 import { Alert } from '@/components/ui/Alert'
 import { Spinner } from '@/components/ui/Spinner'
 import { parseExcelFile, autoDetectMapping, TRIP_COLUMN_SUGGESTIONS, CLIENT_COLUMN_SUGGESTIONS } from '@/lib/utils/excel'
-import { Upload, CheckCircle, AlertTriangle, ChevronRight } from 'lucide-react'
+import { Upload, CheckCircle, ChevronRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 type ImportType = 'clients' | 'trips'
@@ -43,7 +43,7 @@ export default function ImportPage() {
       setParsed({ sheetNames: result.sheets, rows, columns: Object.keys(rows[0] ?? {}) })
       setSelectedSheet(sheetName)
       setStep(2)
-    } catch (err) {
+    } catch {
       toast.error('Nie można odczytać pliku Excel')
     } finally {
       setLoading(false)
@@ -167,7 +167,7 @@ export default function ImportPage() {
             <h2 className="text-lg font-semibold">Mapowanie kolumn</h2>
             <p className="text-sm text-gray-500">Dopasuj kolumny z pliku do pól aplikacji.</p>
             <div className="space-y-3">
-              {Object.entries(suggestions).map(([field, hint]) => (
+              {Object.entries(suggestions).map(([field]) => (
                 <div key={field} className="flex items-center gap-3">
                   <span className="text-sm font-medium text-gray-700 w-40 shrink-0">{field}</span>
                   <select

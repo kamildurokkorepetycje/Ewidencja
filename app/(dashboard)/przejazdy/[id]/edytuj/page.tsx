@@ -21,7 +21,7 @@ export default async function EdytujPrzejazdPage({ params }: Props) {
   ] = await Promise.all([
     supabase
       .from('trips')
-      .select('*, vehicle:vehicles(*), driver:drivers(*), client:clients(*)')
+      .select('*, vehicle:vehicles(*), driver:drivers(*), client:clients(*), fuel_purchases(*)')
       .eq('id', id)
       .single(),
     supabase.from('vehicles').select('*').eq('is_active', true).order('brand'),

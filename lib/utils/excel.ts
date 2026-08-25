@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { Client, Trip, Vehicle, Driver } from '@/lib/types'
+import type { Client, Trip } from '@/lib/types'
 
 export interface ExcelRow {
   [key: string]: string | number | boolean | null | undefined

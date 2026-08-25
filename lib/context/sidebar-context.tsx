@@ -1,16 +1,35 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, ReactNode, useMemo, useState } from 'react'
 
 interface SidebarContextType {
+  isOpen: boolean
   open: () => void
+  close: () => void
+  toggle: () => void
 }
 
-const SidebarContext = createContext<SidebarContextType>({ open: () => {} })
+const SidebarContext = createContext<SidebarContextType>({
+  isOpen: false,
+  open: () => {},
+  close: () => {},
+  toggle: () => {}
+})
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
-  // State lives here so Header can trigger it via context
-  return <SidebarContext.Provider value={{ open: () => {} }}>{children}</SidebarContext.Provider>
+  const [isOpen, setIsOpen] = useState(false)
+
+  const value = useMemo(
+    () => ({
+      isOpen,
+      open: () => setIsOpen(true),
+      close: () => setIsOpen(false),
+      toggle: () => setIsOpen((current) => !current)
+    }),
+    [isOpen]
+  )
+
+  return <SidebarContext.Provider value={value}>{children}</SidebarContext.Provider>
 }
 
 export function useSidebar() {
