@@ -515,6 +515,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     : 'bg-emerald-500'
 
   async function onSubmit(formData: Record<string, unknown>) {
+    if (loading) return
     allowNavigationRef.current = true
     setLoading(true)
     try {
@@ -560,7 +561,8 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
       if (!res.ok) throw new Error(await readErrorMessage(res, 'Błąd zapisu'))
 
       toast.success(initialData ? 'Przejazd zaktualizowany' : 'Przejazd dodany')
-      router.push('/przejazdy')
+  setLoading(false)
+  router.replace('/przejazdy')
     } catch (e: unknown) {
       allowNavigationRef.current = false
       toast.error(e instanceof Error ? e.message : 'Błąd zapisu przejazdu')
