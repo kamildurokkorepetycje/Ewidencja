@@ -600,7 +600,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
           )}
 
           {/* ── Section 1: Podstawowe dane ── */}
-          <div className="surface overflow-hidden">
+          <div className="surface">
             <div className="flex items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary-600 text-white text-xs font-bold shrink-0">1</span>
               <div className="flex items-center gap-2">
@@ -731,7 +731,7 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
           </div>
 
           {/* ── Section 2: Trasy wyjazdu ── */}
-          <div className="surface overflow-hidden">
+          <div className="surface">
             <div className="flex items-center gap-2 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100 bg-slate-50">
               <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-bold shrink-0">2</span>
               <div className="flex items-center gap-2 flex-1 min-w-0">
