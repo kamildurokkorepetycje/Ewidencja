@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
   if (type === 'trips') {
     let query = supabase
       .from('trips')
-      .select('*, vehicle:vehicles(brand,model,registration_number), driver:drivers(first_name,last_name), client:clients(code,name,city)')
+      .select('*, vehicle:vehicles!trips_vehicle_id_fkey(brand,model,registration_number), driver:drivers!trips_driver_id_fkey(first_name,last_name), client:clients!trips_client_id_fkey(code,name,city)')
       .order('date_from', { ascending: false })
 
     if (dateFrom) query = query.gte('date_from', dateFrom)

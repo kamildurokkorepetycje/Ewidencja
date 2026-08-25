@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('trips')
-    .select('*, vehicle:vehicles(*), driver:drivers(*), client:clients(*)')
+    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*)')
     .gte('date_from', `${year}-01-01`)
     .lte('date_from', `${year}-12-31`)
     .order('date_from')

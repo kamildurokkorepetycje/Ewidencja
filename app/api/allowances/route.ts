@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('trip_allowances')
-    .select('*, trip:trips(id,date_from,date_to,card_number,client:clients(name,city))')
+    .select('*, trip:trips!trip_allowances_trip_id_fkey(id,date_from,date_to,card_number,client:clients!trips_client_id_fkey(name,city))')
     .order('day', { ascending: false })
     .order('allowance_type', { ascending: false })
 

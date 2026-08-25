@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   let query = supabase
     .from('fuel_purchases')
-    .select('*, vehicle:vehicles(brand,model,registration_number), trip:trips(date_from,date_to,card_number)')
+    .select('*, vehicle:vehicles!fuel_purchases_vehicle_id_fkey(brand,model,registration_number), trip:trips!fuel_purchases_trip_id_fkey(date_from,date_to,card_number)')
     .order('date', { ascending: false })
 
   const vehicleId = searchParams.get('vehicle_id')

@@ -20,7 +20,7 @@ export default async function KlientDetailPage({ params }: Props) {
     supabase.from('clients').select('*').eq('id', id).single(),
     supabase
       .from('trips')
-      .select('*, vehicle:vehicles(brand,model,registration_number)')
+      .select('*, vehicle:vehicles!trips_vehicle_id_fkey(brand,model,registration_number)')
       .eq('client_id', id)
       .order('date_from', { ascending: false })
   ])
