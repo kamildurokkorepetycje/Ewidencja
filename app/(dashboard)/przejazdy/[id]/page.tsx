@@ -17,14 +17,20 @@ interface Props {
 export default async function SzczegolyPrzejazduPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
-  const { data } = await supabase
+  const { data: tripRow, error } = await supabase
     .from('trips')
-    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*), fuel_purchases(*)')
+    .select('*')
     .eq('id', id)
     .single()
 
-  if (!data) return notFound()
-  const trip = data as Trip
+  if (error || !tripRow) return notFound()
+  const [{ data: vehicle }, { data: driver }, { data: client }, { data: fuelPurchases }] = await Promise.all([
+    supabase.from('vehicles').select('*').eq('id', tripRow.vehicle_id).maybeSingle(),
+    supabase.from('drivers').select('*').eq('id', tripRow.driver_id).maybeSingle(),
+    supabase.from('clients').select('*').eq('id', tripRow.client_id).maybeSingle(),
+    supabase.from('fuel_purchases').select('*').eq('trip_id', id).order('date')
+  ])
+  const trip = { ...tripRow, vehicle: vehicle ?? undefined, driver: driver ?? undefined, client: client ?? undefined, fuel_purchases: fuelPurchases ?? [] } as Trip
   const legs = trip.trip_legs ?? []
   const purchases = trip.fuel_purchases ?? []
 
