@@ -12,8 +12,9 @@ export async function GET(request: NextRequest) {
   if (clientId) {
     const { data: distances, error } = await supabase
       .from('hotel_client_distances')
-      .select('hotel_id, distance_km, hotel:hotel_locations(id, name, city, notes, is_active, created_at, user_id)')
+      .select('hotel_id, distance_km, hotel:hotel_locations!hotel_distance_owner_hotel_fk(id, name, city, notes, is_active, created_at, user_id)')
       .eq('client_id', clientId)
+      .eq('user_id', user.id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

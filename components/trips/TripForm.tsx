@@ -382,9 +382,15 @@ export function TripForm({ initialData, vehicles, clients: initialClients, hotel
     })
     // Fetch hotels assigned to this client
     fetch(`/api/hotels?client_id=${client.id}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error('Nie można pobrać hoteli klienta')
+        return r.json()
+      })
       .then(({ data }) => setAvailableHotels((data ?? []).filter((h: HotelLocation) => h.is_active)))
-      .catch(() => {})
+      .catch(() => {
+        setAvailableHotels([])
+        toast.error('Nie można pobrać hoteli przypisanych do klienta')
+      })
   }
 
   async function handleCreateClient() {
