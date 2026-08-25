@@ -7,7 +7,7 @@ import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Pagination } from '@/components/ui/Pagination'
-import { ConfirmModal } from '@/components/ui/Modal'
+import { Modal } from '@/components/ui/Modal'
 import { Spinner } from '@/components/ui/Spinner'
 import { Alert } from '@/components/ui/Alert'
 import { DatePicker } from '@/components/ui/DatePicker'
@@ -95,7 +95,7 @@ function PrzejazdyContent() {
     setPage(1)
   }, [filters, search, quickFilter])
 
-  const handleDelete = async () => {
+  const handleDelete = async (deleteFuel: boolean) => {
     if (!deleteId) return
     setDeleteLoading(true)
     try {
@@ -103,10 +103,10 @@ function PrzejazdyContent() {
       const res = await fetch(`/api/trips/${deleteId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ expected_updated_at: trip?.updated_at })
+        body: JSON.stringify({ expected_updated_at: trip?.updated_at, delete_fuel: deleteFuel })
       })
       if (!res.ok) throw new Error('Nie można usunąć przejazdu')
-      toast.success('Przejazd usunięty')
+      toast.success(deleteFuel ? 'Przejazd i tankowania usunięte' : 'Przejazd usunięty, tankowania zachowane')
       setDeleteId(null)
       fetchTrips()
     } catch {
@@ -568,15 +568,21 @@ function PrzejazdyContent() {
         <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
       </div>
 
-      <ConfirmModal
+      <Modal
         open={!!deleteId}
         onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
         title="Usuń przejazd"
-        message="Czy na pewno chcesz usunąć ten przejazd? Tej operacji nie można cofnąć."
-        confirmLabel="Usuń"
-        loading={deleteLoading}
-      />
+        size="sm"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteId(null)} disabled={deleteLoading}>Anuluj</Button>
+            <Button variant="outline" onClick={() => handleDelete(false)} loading={deleteLoading}>Zostaw paliwo</Button>
+            <Button variant="danger" onClick={() => handleDelete(true)} loading={deleteLoading}>Usuń z paliwem</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-gray-600">Czy usunąć przejazd? Możesz zachować powiązane tankowania albo usunąć je razem z przejazdem.</p>
+      </Modal>
     </div>
   )
 }

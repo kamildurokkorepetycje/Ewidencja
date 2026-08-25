@@ -49,9 +49,14 @@ export async function DELETE(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { id } = await params
-  const { expected_updated_at } = await request.json().catch(() => ({}))
+  const { expected_updated_at, delete_fuel } = await request.json().catch(() => ({}))
   if (typeof expected_updated_at !== 'string') return NextResponse.json({ error: 'Brak wersji rekordu' }, { status: 400 })
-  const { error } = await supabase.rpc('delete_trip_and_recalculate', { p_id: id, p_expected_updated_at: expected_updated_at })
+  if (typeof delete_fuel !== 'boolean') return NextResponse.json({ error: 'Brak decyzji dotyczącej tankowań' }, { status: 400 })
+  const { error } = await supabase.rpc('delete_trip_and_recalculate', {
+    p_id: id,
+    p_expected_updated_at: expected_updated_at,
+    p_delete_fuel: delete_fuel
+  })
   if (error) return NextResponse.json({ error: 'Przejazd został zmieniony przez innego użytkownika lub nie istnieje' }, { status: 409 })
   return NextResponse.json({ success: true })
 }
