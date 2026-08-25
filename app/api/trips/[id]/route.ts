@@ -13,7 +13,7 @@ export async function GET(
   const { id } = await params
   const { data, error } = await supabase
     .from('trips')
-    .select('*, vehicle:vehicles(*), driver:drivers(*), client:clients(*), fuel_purchases(*), trip_allowances(*)')
+    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*), fuel_purchases(*), trip_allowances(*)')
     .eq('id', id)
     .single()
   if (error) return NextResponse.json({ error: 'Nie znaleziono przejazdu' }, { status: 404 })

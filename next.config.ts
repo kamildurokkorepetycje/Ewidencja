@@ -6,7 +6,8 @@ const withPWA = withPWAInit({
   cacheOnFrontEndNav: false,
   aggressiveFrontEndNavCaching: false,
   reloadOnOnline: true,
-  disable: process.env.NODE_ENV === 'development',
+  // Re-enable only after upgrading/retesting the worker; the current generated worker fails at runtime.
+  disable: true,
   workboxOptions: {
     disableDevLogs: true
   }

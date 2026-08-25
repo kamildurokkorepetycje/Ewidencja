@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, Number(params.get('limit') ?? '50') || 50))
   let query = supabase
     .from('trips')
-    .select('*, vehicle:vehicles(*), driver:drivers(*), client:clients(*)', { count: 'exact' })
+    .select('*, vehicle:vehicles!trips_vehicle_id_fkey(*), driver:drivers!trips_driver_id_fkey(*), client:clients!trips_client_id_fkey(*)', { count: 'exact' })
     .order('date_from', { ascending: false })
     .order('trip_sequence', { ascending: false })
     .range((page - 1) * limit, page * limit - 1)
