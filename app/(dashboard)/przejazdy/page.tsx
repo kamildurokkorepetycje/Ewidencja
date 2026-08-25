@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useState, useEffect, useCallback, useMemo } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Header } from '@/components/layout/Header'
 import { Button } from '@/components/ui/Button'
@@ -23,6 +23,7 @@ type QuickFilter = 'all' | 'issues' | 'no_invoice' | 'hotel'
 type SortKey = 'date' | 'client' | 'km' | 'fuel'
 
 function PrzejazdyContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const refreshKey = searchParams.get('t')
   const [trips, setTrips] = useState<Trip[]>([])
@@ -67,8 +68,14 @@ function PrzejazdyContent() {
       const params = buildTripParams(page, PAGE_SIZE)
 
       const res = await fetch(`/api/trips?${params}`)
-      if (!res.ok) throw new Error('Błąd pobierania przejazdów')
-      const { data, count } = await res.json()
+      const contentType = res.headers.get('content-type') ?? ''
+      if (res.redirected || !contentType.includes('application/json')) {
+        router.replace('/login')
+        return
+      }
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.error ?? 'Błąd pobierania przejazdów')
+      const { data, count } = payload
       setTrips(data ?? [])
       setTotalCount(count ?? 0)
       setTotalPages(Math.ceil((count ?? 0) / PAGE_SIZE) || 1)
@@ -77,7 +84,7 @@ function PrzejazdyContent() {
     } finally {
       setLoading(false)
     }
-  }, [page, buildTripParams, refreshKey])
+  }, [page, buildTripParams, refreshKey, router])
 
   useEffect(() => {
     fetchTrips()
