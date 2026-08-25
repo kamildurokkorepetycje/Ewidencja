@@ -5,11 +5,12 @@ import { saveTripCommandSchema } from '@/lib/schemas/trip-command'
 import type { Trip } from '@/lib/types'
 
 const MAX_PAGE_SIZE = 100
+const privateApiHeaders = { 'Cache-Control': 'private, no-store, max-age=0' }
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: privateApiHeaders })
 
   const params = new URL(request.url).searchParams
   const page = Math.max(1, Number(params.get('page') ?? '1') || 1)
@@ -33,7 +34,10 @@ export async function GET(request: NextRequest) {
   if (vehicleId) query = query.eq('vehicle_id', vehicleId)
 
   const { data, error, count } = await query
-  if (error) return NextResponse.json({ error: 'Nie można pobrać przejazdów' }, { status: 500 })
+  if (error) {
+    console.error('Trips list query failed', error)
+    return NextResponse.json({ error: 'Nie można pobrać przejazdów' }, { status: 500, headers: privateApiHeaders })
+  }
 
   const search = params.get('search')?.trim().toLowerCase()
   const filtered = ((data ?? []) as Trip[]).filter((trip) => {
@@ -44,7 +48,7 @@ export async function GET(request: NextRequest) {
   const hasErrors = params.get('has_errors') === 'true'
   const result = hasErrors ? filtered.filter((trip) => detectTripErrors(trip, trip.vehicle).length > 0) : filtered
 
-  return NextResponse.json({ data: result, count: count ?? result.length })
+  return NextResponse.json({ data: result, count: count ?? result.length }, { headers: privateApiHeaders })
 }
 
 export async function POST(request: NextRequest) {
